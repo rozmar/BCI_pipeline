@@ -8,7 +8,7 @@ import os
 import pickle
 import shutil
 #%%
-paths = ['/home/rozmar/Data/Behavior/Behavior_rigs/KayvonScope']
+paths = ['/home/rozmar/Data/Behavior/Behavior_rigs/KayvonScope',r'C:\Users\bpod\Documents\Pybpod',r'C:\Users\labadmin\Documents\Pybpod']
 for defpath in paths:
     if os.path.exists(defpath):
         break
@@ -154,7 +154,7 @@ def minethedata(data):
         trial_start_time = data['PC-TIME'][trial_start_idx]
         go_cue_time = df_trial.loc[(df_trial['MSG'] == 'GoCue') & (df_trial['TYPE'] == 'TRANSITION'),'PC-TIME'].values#[0]#.index.to_numpy()[0]
         if len(go_cue_time) == 0:
-            break # no go cue no trial
+            continue # no go cue no trial
         lick_left_times = df_trial.loc[data['var:WaterPort_L_ch_in'] == data['+INFO'],'PC-TIME'].values
         lick_right_times = df_trial.loc[data['var:WaterPort_R_ch_in'] == data['+INFO'],'PC-TIME'].values
         reward_left_times = df_trial.loc[(data['MSG'] == 'Reward_L') & (data['TYPE'] == 'TRANSITION'),'PC-TIME'].values
@@ -333,7 +333,7 @@ def load_pickles_for_online_analysis(projectdir = Path(defpath),projectnames_nee
                                 for sessionname in os.listdir(setupname / 'sessions'):
                                     sessionnames.append(sessionname[:8])#only the date
                                 sessionnames = np.sort(np.unique(sessionnames))
-                                sessiondatestoload = sessionnames[-5:]
+                                sessiondatestoload = sessionnames[-3:]
                                 sessions = np.sort(os.listdir(setupname / 'sessions'))
                             for sessionname in sessions:
                                 if sessionname[-3:] == 'pkl' and (not load_only_last_day or sessionname[:8] in sessiondatestoload): 
@@ -341,12 +341,15 @@ def load_pickles_for_online_analysis(projectdir = Path(defpath),projectnames_nee
                                     with open(setupname / 'sessions'/ sessionname,'rb') as readfile:
                                         variables_new = pickle.load(readfile)
                                     if len(variables_new.keys()) > 0:
+                                        if len(variables_new['trial_start_times'])==0:
+                                            continue # no trial no analysis
 # =============================================================================
 #                                         print([len(variables_new['trial_num']),len(variables_new['time_to_hit'])])
 #                                         if np.diff([len(variables_new['trial_num']),len(variables_new['time_to_hit'])])[0] != 0:
 #                                             time.sleep(1000)
 # =============================================================================
                                         if  not subjectnames_needed or variables_new['subject'] in subjectnames_needed:
+                                            
                                             variables_new['file_start_time']=[variables_new['trial_start_times'][0]]
                                             
                                             if len(variables_out.keys()) == 0: # initialize dictionary
