@@ -89,7 +89,7 @@ def load_and_parse_a_csv_file(csvfilename,subject_needed = ''):
         for trialnumber_real,trialnum in zip(trialnumbers_real,trialnumbers):
             #df['Trial_number'][df['Trial_number_in_session'] == trialnum] = int(blocknumber)
             try:
-                df.loc[df['Trial_number_in_session'] == trialnum, 'Trial_number'] = int(trialnumber_real)
+                df.loc[df['Trial_number_in_session'] == trialnum, 'Trial_number'] = int(trialnumber_real) - 1  # Note that in the pybpod protocol the trial number comes BEFORE the go cue, so the numbering is off by one
             except:
                 df.loc[df['Trial_number_in_session'] == trialnum, 'Block_number'] = np.nan
     # saving variables (if any)
@@ -126,11 +126,13 @@ def load_and_parse_a_csv_file(csvfilename,subject_needed = ''):
 
 
 #%%
-def minethedata(data):
+def minethedata(data,extract_variables = False):
     #%%
-    Zaber_moves_channel = ['Wire1High','Wire1Low']
+    Zaber_moves_channel = ['Wire1High','Wire1Low'] # TODO this is hard coded, should be in the variables
     trial_start_idxs = data.loc[data['TYPE'] == 'TRIAL'].index.to_numpy()
     trial_end_idxs = data.loc[data['TYPE'] == 'END-TRIAL'].index.to_numpy()
+    
+    #threshold_passed_idx =
     if len(trial_start_idxs) > len(trial_end_idxs):
         trial_end_idxs = np.concatenate([trial_end_idxs,[len(data)]])
     
@@ -146,13 +148,23 @@ def minethedata(data):
                  'trial_hit':list(),
                  'time_to_hit':list(),
                  'trial_num':list(),
-                 
+                 'threshold_crossing_times':list()                 
                  }
+    if extract_variables:
+        for key_now in data.keys():
+            if 'var:'in key_now:
+                data_dict[key_now]= list()
     
     for trial_num,(trial_start_idx, trial_end_idx) in enumerate(zip(trial_start_idxs,trial_end_idxs)):
         df_trial =  data[trial_start_idx:trial_end_idx]
+        try:
+            df_past_trial = data[trial_end_idx:trial_start_idxs[trial_num+1]]
+        except:
+            df_past_trial = data[trial_end_idx:]
+        #TODO df_past_trial contains the scanimage file name and the camera file names
         trial_start_time = data['PC-TIME'][trial_start_idx]
         go_cue_time = df_trial.loc[(df_trial['MSG'] == 'GoCue') & (df_trial['TYPE'] == 'TRANSITION'),'PC-TIME'].values#[0]#.index.to_numpy()[0]
+        threshold_crossing_time = df_trial.loc[(df_trial['MSG'] == 'ResponseInRewardZone') & (df_trial['TYPE'] == 'TRANSITION'),'PC-TIME'].values#[0]#.index.to_numpy()[0]
         if len(go_cue_time) == 0:
             continue # no go cue no trial
         lick_left_times = df_trial.loc[data['var:WaterPort_L_ch_in'] == data['+INFO'],'PC-TIME'].values
@@ -163,10 +175,14 @@ def minethedata(data):
         autowater_right_times = df_trial.loc[(data['MSG'] == 'Auto_Water_R') & (data['TYPE'] == 'TRANSITION'),'PC-TIME'].values
         ITI_start_times = df_trial.loc[(data['MSG'] == 'ITI') & (data['TYPE'] == 'TRANSITION'),'PC-TIME'].values
         zaber_motor_movement_times = df_trial.loc[(Zaber_moves_channel[0] == data['+INFO']) | (Zaber_moves_channel[1] == data['+INFO']),'PC-TIME'].values
-        
+        trial_number = df_trial.loc[(df_trial['MSG'] == 'GoCue') & (df_trial['TYPE'] == 'TRANSITION'),'Trial_number'].values
         # convert to seconds from trial start
         zero_time = np.asarray(trial_start_time,dtype = 'datetime64[us]')
         go_cue_time = (np.asarray(np.asarray(go_cue_time,dtype = 'datetime64[us]')-zero_time,float)/1000000)[0]
+        try:
+            threshold_crossing_time = (np.asarray(np.asarray(threshold_crossing_time,dtype = 'datetime64[us]')-zero_time,float)/1000000)[0]
+        except:
+            threshold_crossing_time  = np.nan
         lick_left_times = (np.asarray(np.asarray(lick_left_times,dtype = 'datetime64[us]')-zero_time,float)/1000000)
         lick_right_times = (np.asarray(np.asarray(lick_right_times,dtype = 'datetime64[us]')-zero_time,float)/1000000)
         
@@ -179,7 +195,7 @@ def minethedata(data):
         
         
         
-        data_dict['trial_num'].append(trial_num)
+        data_dict['trial_num'].append(trial_number)
         data_dict['go_cue_times'].append(go_cue_time)
         data_dict['trial_start_times'].append(trial_start_time)
         data_dict['lick_L'].append(lick_left_times)
@@ -189,6 +205,12 @@ def minethedata(data):
         data_dict['autowater_L'].append(autowater_left_times)
         data_dict['autowater_R'].append(autowater_right_times)
         data_dict['zaber_move_forward'].append(zaber_motor_movement_times)
+        data_dict['threshold_crossing_times'].append(threshold_crossing_time)
+        
+        if extract_variables:
+            for key_now in data.keys():
+                if 'var:'in key_now:
+                    data_dict[key_now].append(df_trial.loc[(df_trial['MSG'] == 'GoCue') & (df_trial['TYPE'] == 'TRANSITION'),key_now].values[0])
         
         reward_times = np.concatenate([reward_left_times,reward_right_times])
         if len(reward_times)>0:
@@ -197,7 +219,8 @@ def minethedata(data):
         else:
             data_dict['trial_hit'].append(False)
             data_dict['time_to_hit'].append(np.nan)
-       #%% 
+        #break
+       #%%
     return data_dict
         
   
