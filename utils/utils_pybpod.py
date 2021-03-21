@@ -7,6 +7,7 @@ import time
 import os
 import pickle
 import shutil
+import json
 #%%
 paths = ['/home/rozmar/Data/Behavior/Behavior_rigs/KayvonScope',r'C:\Users\bpod\Documents\Pybpod',r'C:\Users\labadmin\Documents\Pybpod']
 for defpath in paths:
@@ -68,10 +69,12 @@ def load_and_parse_a_csv_file(csvfilename,subject_needed = ''):
     experimenter = tempstr[2:tempstr[2:].find('"')+2] #+2
     tempstr = df['+INFO'][df['MSG']=='SUBJECT-NAME'].values[0]
     subject = tempstr[2:tempstr[2:].find("'")+2] #+2
+    setup = df['+INFO'][df['MSG']=='SETUP-NAME'].values[0]
     if len(subject_needed)>0 and subject.lower() != subject_needed.lower():
         return None
     df['experimenter'] = experimenter
     df['subject'] = subject
+    df['setup'] = setup
     # adding trial numbers in session
     idx = (df[df['TYPE'] == 'TRIAL']).index.to_numpy()
     idx = np.concatenate(([0],idx,[len(df)]),0)
@@ -223,7 +226,37 @@ def minethedata(data,extract_variables = False):
        #%%
     return data_dict
         
-  
+def generate_zaber_info_for_pybpod_dict(behavior_dict,subject_name,setup_name,zaber_folder_root = '/home/rozmar/Data/Behavior/BCI_Zaber_data'):
+    if setup_name == 'DOM3':
+        setup_dirname = 'DOM3-MMIMS'
+    else:
+        setup_dirname = 'setup_name'
+    zaberdir = os.path.join(zaber_folder_root,setup_dirname,'subjects',subject_name)
+    zaberfiles = np.sort(os.listdir(zaberdir))[::-1]
+    zabertimes = list()
+    for zaberfile in zaberfiles:
+        zabertime = datetime.strptime(zaberfile[:-5],'%Y-%m-%d_%H-%M-%S')
+        zabertimes.append(zabertime)
+    zabertimes = np.asarray(zabertimes)
+    zaber_file_idx_prev= np.nan
+    zaber_vars_dict = {'acceleration':list(),
+                       'direction':list(),
+                       'limit_close':list(),
+                       'limit_far':list(),
+                       'reward_zone':list(),
+                       'speed':list(),
+                       'trigger_step_size':list(),
+                       'max_speed':list(),
+                       'microstep_size':list()}
+    for trial_start_time in behavior_dict['trial_start_times']:
+        zaber_file_idx = np.argmax(zabertimes<trial_start_time)
+        if zaber_file_idx  != zaber_file_idx_prev:
+            with open(os.path.join(zaberdir,zaberfiles[zaber_file_idx]), "r") as read_file:
+                zaber_dict= json.load(read_file)
+            zaber_file_idx_prev = zaber_file_idx
+        for zaber_key in zaber_vars_dict.keys():
+            zaber_vars_dict[zaber_key].append(zaber_dict['zaber'][zaber_key])
+    return zaber_vars_dict  
 
 def generate_pickles_from_csv(projectdir = Path(defpath),
                               projectnames_needed = None, 
