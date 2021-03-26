@@ -14,7 +14,17 @@ for defpath in paths:
     if os.path.exists(defpath):
         break
 #defpath = 'C:\\Users\\labadmin\\Documents\\Pybpod\\Projects'#'/home/rozmar/Network/BehaviorRig/Behavroom-Stacked-2/labadmin/Documents/Pybpod/Projects'
-
+def calculate_step_time(s,v,a):
+    #s : step size in mm
+    #v : max speed in mm/s
+    #a : accelerateio in mm/s**2
+    t1 = v/a
+    s1 = t1*v
+    if s1>=s:
+        t = 2*np.sqrt((s/a)/2)
+    else:
+        t = 2*v/a+(s-(t1*v))/v
+    return t
 def loaddirstucture(projectdir = Path(defpath),projectnames_needed = None, experimentnames_needed = None,  setupnames_needed=None):
     dirstructure = dict()
     projectnames = list()
@@ -137,10 +147,11 @@ def minethedata(data,extract_variables = False):
     
     #threshold_passed_idx =
     if len(trial_start_idxs) > len(trial_end_idxs):
-        trial_end_idxs = np.concatenate([trial_end_idxs,[len(data)]])
+        trial_end_idxs = np.concatenate([trial_end_idxs,[len(data)-1]])
     
     data_dict = {'go_cue_times':list(),
                  'trial_start_times':list(),
+                 'trial_end_times':list(),
                  'lick_L':list(),
                  'lick_R':list(),
                  'reward_L':list(),
@@ -156,7 +167,7 @@ def minethedata(data,extract_variables = False):
     if extract_variables:
         for key_now in data.keys():
             if 'var:'in key_now:
-                data_dict[key_now]= list()
+                data_dict[key_now.replace(':','_')]= list()
     
     for trial_num,(trial_start_idx, trial_end_idx) in enumerate(zip(trial_start_idxs,trial_end_idxs)):
         df_trial =  data[trial_start_idx:trial_end_idx]
@@ -166,41 +177,59 @@ def minethedata(data,extract_variables = False):
             df_past_trial = data[trial_end_idx:]
         #TODO df_past_trial contains the scanimage file name and the camera file names
         trial_start_time = data['PC-TIME'][trial_start_idx]
-        go_cue_time = df_trial.loc[(df_trial['MSG'] == 'GoCue') & (df_trial['TYPE'] == 'TRANSITION'),'PC-TIME'].values#[0]#.index.to_numpy()[0]
-        threshold_crossing_time = df_trial.loc[(df_trial['MSG'] == 'ResponseInRewardZone') & (df_trial['TYPE'] == 'TRANSITION'),'PC-TIME'].values#[0]#.index.to_numpy()[0]
+        trial_end_time = data['PC-TIME'][trial_end_idx]
+        go_cue_time = df_trial.loc[(df_trial['MSG'] == 'GoCue') & (df_trial['TYPE'] == 'TRANSITION'),'BPOD-INITIAL-TIME'].values#[0]#.index.to_numpy()[0]
+        threshold_crossing_time = df_trial.loc[(df_trial['MSG'] == 'ResponseInRewardZone') & (df_trial['TYPE'] == 'TRANSITION'),'BPOD-INITIAL-TIME'].values#[0]#.index.to_numpy()[0]
         if len(go_cue_time) == 0:
             continue # no go cue no trial
-        lick_left_times = df_trial.loc[data['var:WaterPort_L_ch_in'] == data['+INFO'],'PC-TIME'].values
-        lick_right_times = df_trial.loc[data['var:WaterPort_R_ch_in'] == data['+INFO'],'PC-TIME'].values
-        reward_left_times = df_trial.loc[(data['MSG'] == 'Reward_L') & (data['TYPE'] == 'TRANSITION'),'PC-TIME'].values
-        reward_right_times = df_trial.loc[(data['MSG'] == 'Reward_R') & (data['TYPE'] == 'TRANSITION'),'PC-TIME'].values
-        autowater_left_times = df_trial.loc[(data['MSG'] == 'Auto_Water_L') & (data['TYPE'] == 'TRANSITION'),'PC-TIME'].values
-        autowater_right_times = df_trial.loc[(data['MSG'] == 'Auto_Water_R') & (data['TYPE'] == 'TRANSITION'),'PC-TIME'].values
-        ITI_start_times = df_trial.loc[(data['MSG'] == 'ITI') & (data['TYPE'] == 'TRANSITION'),'PC-TIME'].values
-        zaber_motor_movement_times = df_trial.loc[(Zaber_moves_channel[0] == data['+INFO']) | (Zaber_moves_channel[1] == data['+INFO']),'PC-TIME'].values
-        trial_number = df_trial.loc[(df_trial['MSG'] == 'GoCue') & (df_trial['TYPE'] == 'TRANSITION'),'Trial_number'].values
-        # convert to seconds from trial start
-        zero_time = np.asarray(trial_start_time,dtype = 'datetime64[us]')
-        go_cue_time = (np.asarray(np.asarray(go_cue_time,dtype = 'datetime64[us]')-zero_time,float)/1000000)[0]
+            
+            
+        lick_left_times = df_trial.loc[data['var:WaterPort_L_ch_in'] == data['+INFO'],'BPOD-INITIAL-TIME'].values
+        lick_right_times = df_trial.loc[data['var:WaterPort_R_ch_in'] == data['+INFO'],'BPOD-INITIAL-TIME'].values
+        reward_left_times = df_trial.loc[(data['MSG'] == 'Reward_L') & (data['TYPE'] == 'TRANSITION'),'BPOD-INITIAL-TIME'].values
+        reward_right_times = df_trial.loc[(data['MSG'] == 'Reward_R') & (data['TYPE'] == 'TRANSITION'),'BPOD-INITIAL-TIME'].values
+        autowater_left_times = df_trial.loc[(data['MSG'] == 'Auto_Water_L') & (data['TYPE'] == 'TRANSITION'),'BPOD-INITIAL-TIME'].values
+        autowater_right_times = df_trial.loc[(data['MSG'] == 'Auto_Water_R') & (data['TYPE'] == 'TRANSITION'),'BPOD-INITIAL-TIME'].values
         try:
-            threshold_crossing_time = (np.asarray(np.asarray(threshold_crossing_time,dtype = 'datetime64[us]')-zero_time,float)/1000000)[0]
+            ITI_start_times = df_trial.loc[(data['MSG'] == 'ITI') & (data['TYPE'] == 'TRANSITION'),'BPOD-INITIAL-TIME'].values[0]
         except:
-            threshold_crossing_time  = np.nan
-        lick_left_times = (np.asarray(np.asarray(lick_left_times,dtype = 'datetime64[us]')-zero_time,float)/1000000)
-        lick_right_times = (np.asarray(np.asarray(lick_right_times,dtype = 'datetime64[us]')-zero_time,float)/1000000)
+            ITI_start_times = np.nan
+        zaber_motor_movement_times = df_trial.loc[(Zaber_moves_channel[0] == data['+INFO']) | (Zaber_moves_channel[1] == data['+INFO']),'BPOD-INITIAL-TIME'].values
+        trial_number = df_trial.loc[(df_trial['MSG'] == 'GoCue') & (df_trial['TYPE'] == 'TRANSITION'),'Trial_number'].values[0]
         
-        reward_left_times = (np.asarray(np.asarray(reward_left_times,dtype = 'datetime64[us]')-zero_time,float)/1000000)
-        reward_right_times = (np.asarray(np.asarray(reward_right_times,dtype = 'datetime64[us]')-zero_time,float)/1000000)
-        autowater_left_times = (np.asarray(np.asarray(autowater_left_times,dtype = 'datetime64[us]')-zero_time,float)/1000000)
-        autowater_right_times = (np.asarray(np.asarray(autowater_right_times,dtype = 'datetime64[us]')-zero_time,float)/1000000)
-        ITI_start_times = (np.asarray(np.asarray(ITI_start_times,dtype = 'datetime64[us]')-zero_time,float)/1000000)
-        zaber_motor_movement_times = (np.asarray(np.asarray(zaber_motor_movement_times,dtype = 'datetime64[us]')-zero_time,float)/1000000)
-        
+# =============================================================================
+#         lick_left_times = df_trial.loc[data['var:WaterPort_L_ch_in'] == data['+INFO'],'PC-TIME'].values
+#         lick_right_times = df_trial.loc[data['var:WaterPort_R_ch_in'] == data['+INFO'],'PC-TIME'].values
+#         reward_left_times = df_trial.loc[(data['MSG'] == 'Reward_L') & (data['TYPE'] == 'TRANSITION'),'PC-TIME'].values
+#         reward_right_times = df_trial.loc[(data['MSG'] == 'Reward_R') & (data['TYPE'] == 'TRANSITION'),'PC-TIME'].values
+#         autowater_left_times = df_trial.loc[(data['MSG'] == 'Auto_Water_L') & (data['TYPE'] == 'TRANSITION'),'PC-TIME'].values
+#         autowater_right_times = df_trial.loc[(data['MSG'] == 'Auto_Water_R') & (data['TYPE'] == 'TRANSITION'),'PC-TIME'].values
+#         ITI_start_times = df_trial.loc[(data['MSG'] == 'ITI') & (data['TYPE'] == 'TRANSITION'),'PC-TIME'].values
+#         zaber_motor_movement_times = df_trial.loc[(Zaber_moves_channel[0] == data['+INFO']) | (Zaber_moves_channel[1] == data['+INFO']),'PC-TIME'].values
+#         trial_number = df_trial.loc[(df_trial['MSG'] == 'GoCue') & (df_trial['TYPE'] == 'TRANSITION'),'Trial_number'].values
+#         # convert to seconds from trial start
+#         zero_time = np.asarray(trial_start_time,dtype = 'datetime64[us]')
+#         go_cue_time = (np.asarray(np.asarray(go_cue_time,dtype = 'datetime64[us]')-zero_time,float)/1000000)[0]
+#         try:
+#             threshold_crossing_time = (np.asarray(np.asarray(threshold_crossing_time,dtype = 'datetime64[us]')-zero_time,float)/1000000)[0]
+#         except:
+#             threshold_crossing_time  = np.nan
+#         lick_left_times = (np.asarray(np.asarray(lick_left_times,dtype = 'datetime64[us]')-zero_time,float)/1000000)
+#         lick_right_times = (np.asarray(np.asarray(lick_right_times,dtype = 'datetime64[us]')-zero_time,float)/1000000)
+#         
+#         reward_left_times = (np.asarray(np.asarray(reward_left_times,dtype = 'datetime64[us]')-zero_time,float)/1000000)
+#         reward_right_times = (np.asarray(np.asarray(reward_right_times,dtype = 'datetime64[us]')-zero_time,float)/1000000)
+#         autowater_left_times = (np.asarray(np.asarray(autowater_left_times,dtype = 'datetime64[us]')-zero_time,float)/1000000)
+#         autowater_right_times = (np.asarray(np.asarray(autowater_right_times,dtype = 'datetime64[us]')-zero_time,float)/1000000)
+#         ITI_start_times = (np.asarray(np.asarray(ITI_start_times,dtype = 'datetime64[us]')-zero_time,float)/1000000)
+#         zaber_motor_movement_times = (np.asarray(np.asarray(zaber_motor_movement_times,dtype = 'datetime64[us]')-zero_time,float)/1000000)
+# =============================================================================
         
         
         data_dict['trial_num'].append(trial_number)
         data_dict['go_cue_times'].append(go_cue_time)
         data_dict['trial_start_times'].append(trial_start_time)
+        data_dict['trial_end_times'].append(trial_end_time)
         data_dict['lick_L'].append(lick_left_times)
         data_dict['lick_R'].append(lick_right_times)
         data_dict['reward_L'].append(reward_left_times)
@@ -213,8 +242,10 @@ def minethedata(data,extract_variables = False):
         if extract_variables:
             for key_now in data.keys():
                 if 'var:'in key_now:
-                    data_dict[key_now].append(df_trial.loc[(df_trial['MSG'] == 'GoCue') & (df_trial['TYPE'] == 'TRANSITION'),key_now].values[0])
+                    data_dict[key_now.replace(':','_')].append(df_trial.loc[(df_trial['MSG'] == 'GoCue') & (df_trial['TYPE'] == 'TRANSITION'),key_now].values[0])
+                
         
+            
         reward_times = np.concatenate([reward_left_times,reward_right_times])
         if len(reward_times)>0:
             data_dict['trial_hit'].append(True)
@@ -222,6 +253,9 @@ def minethedata(data,extract_variables = False):
         else:
             data_dict['trial_hit'].append(False)
             data_dict['time_to_hit'].append(np.nan)
+    for key_now in data_dict.keys():
+        data_dict[key_now] = np.asarray(data_dict[key_now])
+            
         #break
        #%%
     return data_dict
@@ -230,7 +264,7 @@ def generate_zaber_info_for_pybpod_dict(behavior_dict,subject_name,setup_name,za
     if setup_name == 'DOM3':
         setup_dirname = 'DOM3-MMIMS'
     else:
-        setup_dirname = 'setup_name'
+        setup_dirname = setup_name
     zaberdir = os.path.join(zaber_folder_root,setup_dirname,'subjects',subject_name)
     zaberfiles = np.sort(os.listdir(zaberdir))[::-1]
     zabertimes = list()
@@ -256,6 +290,9 @@ def generate_zaber_info_for_pybpod_dict(behavior_dict,subject_name,setup_name,za
             zaber_file_idx_prev = zaber_file_idx
         for zaber_key in zaber_vars_dict.keys():
             zaber_vars_dict[zaber_key].append(zaber_dict['zaber'][zaber_key])
+    for zaber_key in zaber_vars_dict.keys():
+        zaber_vars_dict[zaber_key] = np.asarray(zaber_vars_dict[zaber_key])
+        
     return zaber_vars_dict  
 
 def generate_pickles_from_csv(projectdir = Path(defpath),
