@@ -81,6 +81,12 @@ def extract_files_from_dir(basedir):
 def export_pybpod_files(overwrite=False,behavior_export_basedir = '/home/rozmar/Data/Behavior/BCI_exported'):
 #overwrite = False
 #%%
+# =============================================================================
+#     overwrite=False
+#     behavior_export_basedir = '/home/rozmar/Data/Behavior/BCI_exported'
+# =============================================================================
+    
+    
     calcium_imaging_raw_basedir = dj.config['locations.imagingdata_raw']
     raw_behavior_dirs =  dj.config['locations.behavior_dirs_raw'] 
     
@@ -216,7 +222,7 @@ def export_pybpod_files(overwrite=False,behavior_export_basedir = '/home/rozmar/
                                 #print('triggered')
                             
                     #%
-                    filenames_all= np.asarray(filenames_all)
+                    filenames_all = np.asarray(filenames_all)
                     frame_timestamps_all= np.asarray(frame_timestamps_all)
                     nextfile_timestamps_all= np.asarray(nextfile_timestamps_all)
                     acqtrigger_timestamps_all= np.asarray(acqtrigger_timestamps_all)
@@ -239,18 +245,20 @@ def export_pybpod_files(overwrite=False,behavior_export_basedir = '/home/rozmar/
                     for i,t_now in enumerate(bpod_trial_start_times):
                         for t_next in trigger_arrived_timestamps_all[istriggered]:
                             dt = (t_next-t_now).total_seconds()
-                            if dt<600:
+                            if np.abs(dt)<50:
                                 dist_list.append(dt)
                     dist_list = np.asarray(dist_list)
+                    #%
+                    residual_filenames = filenames_all
+                    residual_timestamps = trigger_arrived_timestamps_all
                     if len(dist_list)>0:
-                        
-                        
                         center_sec = mode(np.asarray(dist_list,int))
                         dist_list = dist_list[(dist_list>center_sec-1) &  (dist_list<center_sec+1)]
                         time_offset = np.median(dist_list)
                         print('time_offset: {} s'.format(time_offset))
                         #%
                         bpod_trial_file_names = list()
+                        bpod_scanimage_time_offset = list()
                         for trial_start_time,trial_end_time in zip(behavior_dict['trial_start_times'],behavior_dict['trial_end_times']):
                             trial_start_time = trial_start_time +datetime.timedelta(seconds = time_offset-.5) #gets a 0.5 second extra
                             trial_end_time = trial_end_time +datetime.timedelta(seconds = time_offset)
@@ -260,23 +268,76 @@ def export_pybpod_files(overwrite=False,behavior_export_basedir = '/home/rozmar/
                                     moviename = np.asarray(filenames_all[istriggered][movie_idxes])
                                 else:
                                     moviename = np.asarray(filenames_all[istriggered][movie_idxes])
+                                movie_trial_time_offset = (trigger_arrived_timestamps_all[istriggered][movie_idxes][0]-(trial_start_time- datetime.timedelta(seconds = time_offset-.5))).total_seconds()
                             else:
                                 moviename = 'no movie for this trial'
+                                movie_trial_time_offset = np.nan
                             bpod_trial_file_names.append(moviename)
+                            bpod_scanimage_time_offset.append(movie_trial_time_offset)
+                            for moviename_now in moviename:
+                                idx = residual_filenames !=moviename_now
+                                residual_filenames = residual_filenames[idx]
+                                residual_timestamps = residual_timestamps[idx]
                             #%
                         behavior_dict['scanimage_file_names'] = bpod_trial_file_names
+                        behavior_dict['scanimage_bpod_time_offset'] = np.asarray(bpod_scanimage_time_offset)
                     else:
                         print('no movie-behavior correspondance found for {}'.format(session))
                         behavior_dict['scanimage_file_names'] = 'no movie files found'
+                    #%  %
+                    #%
+                    triggered = list()
+                    residual_tiff_files = {'median_bpod_si_time_offset':time_offset,
+                                           'triggered':list(),
+                                           'time_from_previous_trial_start' : list(),
+                                           'time_to_next_trial_start' : list(),
+                                           'previous_trial_index': list(),
+                                           'next_trial_index' : list(),
+                                           'scanimage_file_names':list()}
+                    for scanimage_fname, scanimage_timestamp in zip(residual_filenames,residual_timestamps):
+                        if type(scanimage_timestamp) == float:
+                            residual_tiff_files['triggered'].append(False)
+                            movie_start_time_now = frame_timestamps_all[filenames_all==scanimage_fname][0] - datetime.timedelta(seconds = time_offset)
+                        else:
+                            residual_tiff_files['triggered'].append(True)
+                            movie_start_time_now = scanimage_timestamp - datetime.timedelta(seconds = time_offset)
+                        if any(behavior_dict['trial_start_times']>movie_start_time_now):
+                            next_trial_idx = np.where(behavior_dict['trial_start_times']>movie_start_time_now)[0][0]
+                            time_to_next_trial = (behavior_dict['trial_start_times'][next_trial_idx]-movie_start_time_now).total_seconds()# + time_offset
+                        else:
+                            next_trial_idx = np.nan
+                            time_to_next_trial = np.nan
                         
+                        if any(behavior_dict['trial_start_times']<movie_start_time_now):
+                            prev_trial_idx = np.where(behavior_dict['trial_start_times']<movie_start_time_now)[0][-1]
+                            time_from_prev_trial = (movie_start_time_now-behavior_dict['trial_start_times'][prev_trial_idx]).total_seconds() #- time_offset
+                        else:
+                            prev_trial_idx = np.nan
+                            time_from_prev_trial = np.nan
+                        
+                        residual_tiff_files['time_from_previous_trial_start'].append( time_from_prev_trial)
+                        residual_tiff_files['time_to_next_trial_start'].append( time_to_next_trial)
+                        
+                        residual_tiff_files['previous_trial_index'].append( prev_trial_idx)
+                        residual_tiff_files['next_trial_index'].append( next_trial_idx)
+                        residual_tiff_files['scanimage_file_names'].append(scanimage_fname)
+                        
+                    #%
+                    behavior_dict['residual_tiff_files'] = residual_tiff_files
                     bpod_export_dir = os.path.join(behavior_export_basedir,setup,subject)
                     Path(bpod_export_dir).mkdir(parents=True, exist_ok=True)
                     bpod_export_file = '{}-bpod_zaber.npy'.format(session)
                     np.save(os.path.join(bpod_export_dir,bpod_export_file),behavior_dict)
                     bpod_export_file = '{}-bpod_zaber.mat'.format(session)
-                    behavior_dict['trial_start_times'] = np.asarray(behavior_dict['trial_start_times'],str)
-                    behavior_dict['trial_end_times'] = np.asarray(behavior_dict['trial_end_times'],str)
-                    savemat(os.path.join(bpod_export_dir,bpod_export_file),behavior_dict)
+                    behavior_dict_matlab = behavior_dict.copy()
+                    behavior_dict_matlab['trial_start_times'] = np.asarray(behavior_dict['trial_start_times'],str)
+                    behavior_dict_matlab['trial_end_times'] = np.asarray(behavior_dict['trial_end_times'],str)
+                    #%
+                    savemat(os.path.join(bpod_export_dir,bpod_export_file),behavior_dict_matlab)
                     print('{}/{} saved'.format(subject,session))
-
+# =============================================================================
+#                     print('residual files: {}'.format(residual_filenames))
+#                     print('residual times: {}'.format(residual_timestamps))
+# =============================================================================
+                    #timer.sleep(10)
  
