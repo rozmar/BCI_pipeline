@@ -92,7 +92,9 @@ def populatemetadata(updatemetadata = False):
     df_surgery = pd.read_csv(dj.config['locations.metadata_surgery_experiment']+'Surgeries-BCI.csv')
     #%%
     for item in df_surgery.iterrows():
+        
         if item[1]['project'].lower() == dj.config['project'].lower() and (item[1]['status'] == 'training' or item[1]['status'] == 'sacrificed'):
+            
             subjectdata = {
                     'subject_id': item[1]['animal#'],
                     'cage_number': item[1]['cage#'],
@@ -195,22 +197,17 @@ def populatemetadata(updatemetadata = False):
                 surgeryidx += 1
                     
                 #%
-            if item[1]['ID']:
-                #df_wr = online_notebook.fetch_water_restriction_metadata(item[1]['ID'])
+            if item[1]['ID'] and item[1]['wr start date']:
+                wrdata = {
+                        'subject_id':item[1]['animal#'],
+                        'water_restriction_number': item[1]['ID'],
+                        'wr_cage_number': item[1]['cage#'],
+                        'wr_start_date': item[1]['wr start date'],
+                        'wr_start_weight': item[1]['wr start weight'],
+                        }
+                ##print(wrdata)
                 try:
-                    df_wr = pd.read_csv(dj.config['locations.metadata_surgery_experiment']+item[1]['ID']+'.csv')
-                except:
-                    df_wr = None
-                if type(df_wr) == pd.DataFrame:
-                    wrdata = {
-                            'subject_id':item[1]['animal#'],
-                            'water_restriction_number': item[1]['ID'],
-                            'cage_number': item[1]['cage#'],
-                            'wr_start_date': df_wr['Date'][0],
-                            'wr_start_weight': df_wr['Weight'][0],
-                            }
-                    try:
-                        lab.WaterRestriction().insert1(wrdata)
-                    except dj.errors.DuplicateError:
-                        print('duplicate. water restriction :',item[1]['animal#'], ' already exists')
+                    lab.WaterRestriction().insert1(wrdata)
+                except dj.errors.DuplicateError:
+                    print('duplicate. water restriction :',item[1]['animal#'], ' already exists')
                       
