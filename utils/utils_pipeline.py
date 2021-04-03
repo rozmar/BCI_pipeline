@@ -1,4 +1,4 @@
-from utils import utils_pybpod, utils_imaging
+from utils import utils_pybpod, utils_imaging, utils_ephys
 from scipy.io import savemat
 from pathlib import Path
 import os
@@ -82,11 +82,11 @@ def export_pybpod_files(overwrite=False,behavior_export_basedir = '/home/rozmar/
 #overwrite = False
 #%%
 # =============================================================================
-#     overwrite=False
+#     overwrite=True
 #     behavior_export_basedir = '/home/rozmar/Data/Behavior/BCI_exported'
 # =============================================================================
     
-    
+    #%%
     calcium_imaging_raw_basedir = dj.config['locations.imagingdata_raw']
     raw_behavior_dirs =  dj.config['locations.behavior_dirs_raw'] 
     
@@ -129,6 +129,12 @@ def export_pybpod_files(overwrite=False,behavior_export_basedir = '/home/rozmar/
                         behavior_dict = utils_pybpod.minethedata(csv_data,extract_variables = True)
                         subject_name = csv_data['subject'][0]
                         setup_name = csv_data['setup'][0]
+                        experimenter_name = csv_data['experimenter'][0]
+# =============================================================================
+#                         behavior_dict['session_details']=  {'subject_name':subject_name,
+#                                                             'setup_name' : setup_name,
+#                                                             'experimenter_name' : experimenter_name}
+# =============================================================================
                         zaber_dict = utils_pybpod.generate_zaber_info_for_pybpod_dict(behavior_dict,subject_name,setup_name,zaber_folder_root = '/home/rozmar/Data/Behavior/BCI_Zaber_data')
                         zaber_step_times = list()
                         for v,a,s in zip(zaber_dict['speed'],zaber_dict['acceleration'],zaber_dict['trigger_step_size']):
@@ -138,6 +144,10 @@ def export_pybpod_files(overwrite=False,behavior_export_basedir = '/home/rozmar/
                             behavior_dict['zaber_{}'.format(key)] = zaber_dict[key]
                         trialnum = len(behavior_dict['trial_num'])
                         behavior_dict['bpod_file_names'] = np.asarray([sessionfile.filepath.split('/')[-1]]*trialnum)
+                        
+                        behavior_dict['subject_name'] = np.asarray([subject_name]*trialnum)
+                        behavior_dict['setup_name'] = np.asarray([setup_name]*trialnum)
+                        behavior_dict['experimenter_name'] = np.asarray([experimenter_name]*trialnum)
                         if trialnum>0:
                             behavior_dict_list.append(behavior_dict)
                             sessionfile_start_times.append(behavior_dict['trial_start_times'][0])
@@ -336,8 +346,99 @@ def export_pybpod_files(overwrite=False,behavior_export_basedir = '/home/rozmar/
                     savemat(os.path.join(bpod_export_dir,bpod_export_file),behavior_dict_matlab)
                     print('{}/{} saved'.format(subject,session))
 # =============================================================================
+#                     print(behavior_dict['session_details'])
+#                     print(type(behavior_dict['session_details']))
+#                     if type(behavior_dict['session_details']) == np.ndarray:
+#                         timer.sleep(100000)
+# =============================================================================
+# =============================================================================
 #                     print('residual files: {}'.format(residual_filenames))
 #                     print('residual times: {}'.format(residual_timestamps))
 # =============================================================================
                     #timer.sleep(10)
- 
+#%%
+def check_discrepancies_in_behavior_export():
+    behavior_export_basedir = '/home/rozmar/Data/Behavior/BCI_exported'
+    calcium_imaging_raw_basedir = dj.config['locations.imagingdata_raw']
+    setups = os.listdir(behavior_export_basedir)
+    for setup in setups:
+        if '.' in setup:
+            continue
+        subjects = os.listdir(os.path.join(behavior_export_basedir,setup))
+        for subject in subjects:
+            sessions = os.listdir(os.path.join(behavior_export_basedir,setup,subject))
+            for session in sessions:
+                if '.npy' not in session:
+                    continue
+                print([subject,session])
+                #%
+                bpoddata = np.load(os.path.join(behavior_export_basedir,setup,subject,session),allow_pickle = True).tolist()
+                raw_session_dir = os.path.join(calcium_imaging_raw_basedir,setup,subject,session[:-15])
+                tiffiles = list()
+                tiff_basenames = list()
+                tiff_indices = list()
+                h5files = list()
+                h5_basenames = list()
+                h5_indices = list()
+                files = os.listdir(raw_session_dir)
+                
+                for tiffile in files:
+                    if '.tif' in tiffile:
+                       tiffiles.append(tiffile) 
+                       tiff_basenames.append(tiffile[:tiffile.rfind('_')])
+                       idx_string = tiffile[tiffile.rfind('_')+1:tiffile.rfind('.')]
+                       if '-' in idx_string:
+                            idxes = np.arange(int(idx_string[:idx_string.find('-')]),int(idx_string[idx_string.find('-')+1:])+1)
+                       elif ' (' in idx_string:
+                            idxes = [int(idx_string[:idx_string.find(' (')])]
+                       else:
+                            idxes = [int(idx_string)]
+                       tiff_indices.append(np.asarray(idxes))
+                    elif 'h5' in tiffile:
+                        h5files.append(tiffile) 
+                        h5_basenames.append(tiffile[:tiffile.rfind('_')])
+                        idx_string = tiffile[tiffile.rfind('_')+1:tiffile.rfind('.')]
+                        if '-' in idx_string:
+                            idxes = np.arange(int(idx_string[:idx_string.find('-')]),int(idx_string[idx_string.find('-')+1:])+1)
+                        elif ' (' in idx_string:
+                            idxes = [int(idx_string[:idx_string.find(' (')])]
+                        else:
+                            idxes = [int(idx_string)]
+                        h5_indices.append(np.asarray(idxes))
+                            
+                     #
+                h5data = dict()
+                
+                for h5file in h5files:
+                    ephysdata_list = utils_ephys.load_wavesurfer_file(os.path.join(raw_session_dir,h5file))
+                    ephysdata_list_new = list()
+                    for ephysdata in ephysdata_list:
+                        ephysdata_list_new.append(utils_ephys.decode_bitcode(ephysdata))
+                    h5data[h5file] = np.asarray(ephysdata_list_new)
+                        #%
+                tiffiles = np.asarray(tiffiles)
+                residual_tiffiles = tiffiles
+                try:
+                    print('median time offset: {}, std: {}'.format(np.nanmedian(bpoddata['scanimage_bpod_time_offset']),np.nanstd(bpoddata['scanimage_bpod_time_offset'])))
+                except:
+                    print('no movie?')
+                    continue
+                for trialnum, scanimagefile,timeoffset in zip(bpoddata['trial_num'],bpoddata['scanimage_file_names'],bpoddata['scanimage_bpod_time_offset']):
+                    if type(scanimagefile)!=str:#='no movie for this trial':
+                        for scanimagefile_now in scanimagefile:
+                            residual_tiffiles = residual_tiffiles[residual_tiffiles!=scanimagefile_now]
+                        scanimagefile = scanimagefile[0]
+                        tiff_basename =scanimagefile[:scanimagefile.rfind('_')]
+                        idx_string = scanimagefile[scanimagefile.rfind('_')+1:scanimagefile.rfind('.')]
+                        if ' (' in idx_string:
+                            tiff_idx = [int(idx_string[:idx_string.find(' (')])]
+                        else:
+                            tiff_idx = int(idx_string)
+                        for h5file,h5_base,h5_idx in zip(h5files,h5_basenames,h5_indices):
+                            if tiff_basename==h5_base:
+                                if tiff_idx in h5_idx:
+                                    h5data[h5file][h5_idx==tiff_idx]
+                                    bitcode_trial_num = h5data[h5file][h5_idx==tiff_idx][0]['bitcode_trial_nums'][0]
+                                    if trialnum != bitcode_trial_num and bitcode_trial_num > 0:
+                                        print('trialnum does not line up: {} vs {} in {} with {}'.format(trialnum,bitcode_trial_num,os.path.join(raw_session_dir,scanimagefile),h5file))
+                                        print('timeoffset is {}'.format(timeoffset))
