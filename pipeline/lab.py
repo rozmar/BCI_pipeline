@@ -82,7 +82,7 @@ class WaterRestriction(dj.Manual):
     -> Subject
     ---
     water_restriction_number    : varchar(16)   # WR number
-    cage_number                 : int
+    wr_cage_number              : int
     wr_start_date               : date
     wr_start_weight             : Decimal(6,3)
     """
