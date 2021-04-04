@@ -11,6 +11,7 @@ from pybpodgui_api.models.project import Project
 #%%
 def find_pybpod_sessions(subject_names_list,date_now,projects):
     #%
+    
     if type(subject_names_list) != list:
         subject_names_list = [subject_names_list]
     sessions_now = list()
@@ -82,7 +83,7 @@ def export_pybpod_files(overwrite=False,behavior_export_basedir = '/home/rozmar/
 #overwrite = False
 #%%
 # =============================================================================
-#     overwrite=True
+#     overwrite=False
 #     behavior_export_basedir = '/home/rozmar/Data/Behavior/BCI_exported'
 # =============================================================================
     
@@ -154,18 +155,20 @@ def export_pybpod_files(overwrite=False,behavior_export_basedir = '/home/rozmar/
                         #%
                     if len(behavior_dict_list) == 0:
                         print('no behavior found for subject {} - session{}'.format(subject_wr_name,session))
+                        #timer.sleep(10)
                         continue
-                    if  len(behavior_dict_list)>1:
+                    #if  len(behavior_dict_list)>1:
                         #%
-                        order = np.argsort(sessionfile_start_times)
-                        behavior_dict_list = np.asarray(behavior_dict_list)[order]
-                        behavior_dict = {}
-                        for key in behavior_dict_list[0].keys():
-                            keylist = list()
-                            for behavior_dict_now in behavior_dict_list:
-                                for element in behavior_dict_now[key]:
-                                    keylist.append(element)
-                            behavior_dict[key] = np.asarray(keylist)
+                    order = np.argsort(sessionfile_start_times)
+                    behavior_dict_list = np.asarray(behavior_dict_list)[order]
+                    behavior_dict = {}
+                    for key in behavior_dict_list[0].keys():
+                        keylist = list()
+                        for behavior_dict_now in behavior_dict_list:
+                            for element in behavior_dict_now[key]:
+                                keylist.append(element)
+                        behavior_dict[key] = np.asarray(keylist)
+                        
                         #%
     # =============================================================================
     #                     print('multiple bpod files, handle me')
@@ -355,7 +358,7 @@ def export_pybpod_files(overwrite=False,behavior_export_basedir = '/home/rozmar/
 #                     print('residual files: {}'.format(residual_filenames))
 #                     print('residual times: {}'.format(residual_timestamps))
 # =============================================================================
-                    #timer.sleep(10)
+                    timer.sleep(10000)
 #%%
 def check_discrepancies_in_behavior_export():
     behavior_export_basedir = '/home/rozmar/Data/Behavior/BCI_exported'
