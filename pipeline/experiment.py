@@ -216,8 +216,7 @@ class LickPortSetting(dj.Imported):
     lickport_step_size               :   decimal(5, 3) #mm
     lickport_step_time               :   double #s
     lickport_auto_step_freq          :   double #Hz
-    lickport_roi_threshold_low=null  :   double 
-    lickport_roi_threshold_high=null :   double 
+    lickport_maximum_speed           :   double # mm/s
     """
 
     class OpenDuration(dj.Part):

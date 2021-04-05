@@ -53,6 +53,7 @@ def list_exported_bpod_data(behavior_export_basedir = '/home/rozmar/Data/Behavio
 
 #%%
 def populate_behavior():
+    #%%
     behavior_export_basedir = '/home/rozmar/Data/Behavior/BCI_exported'
     session_dict = list_exported_bpod_data(behavior_export_basedir = '/home/rozmar/Data/Behavior/BCI_exported')
     for subject in session_dict.keys():
@@ -109,7 +110,8 @@ def populate_behavior():
                                 'lickport_threshold':0,
                                 'lickport_step_size':bpoddata['zaber_trigger_step_size'][trial_num]/1000,
                                 'lickport_step_time':bpoddata['zaber_trigger_step_time'][trial_num],
-                                'lickport_auto_step_freq':bpoddata['var_BaselineZaberForwardStepFrequency'][trial_num]}
+                                'lickport_auto_step_freq':bpoddata['var_BaselineZaberForwardStepFrequency'][trial_num],
+                                'lickport_maximum_speed':bpoddata['zaber_max_speed'][trial_num]}
                 if bpoddata['var_BaselineZaberForwardStepFrequency'][trial_num]>0:
                     task = 'BCI OL'
                     task_protocol = 0
