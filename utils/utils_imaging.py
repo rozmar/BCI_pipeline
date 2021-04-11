@@ -9,8 +9,8 @@ from os import path
 from suite2p import default_ops as s2p_default_ops
 from suite2p import run_s2p, io,registration
 #%%
-def extract_scanimage_metadata(file):
-    #%%
+def extract_scanimage_metadata(file): # this function is also in utils_io
+    #%
     image = ScanImageTiffReader(file)
     metadata_raw = image.metadata()
     description_first_image = image.description(0)

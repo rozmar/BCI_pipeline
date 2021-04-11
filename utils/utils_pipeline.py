@@ -39,45 +39,6 @@ def find_pybpod_sessions(subject_names_list,date_now,projects):
 
 
 
-def extract_files_from_dir(basedir):
-    #%
-    files = os.listdir(basedir)
-    exts = list()
-    basenames = list()
-    fileindexs = list()
-    dirs = list()
-    for file in files:
-        if Path(os.path.join(basedir,file)).is_dir():
-            exts.append('')
-            basenames.append('')
-            fileindexs.append(np.nan)
-            dirs.append(file)
-        else:
-            if '_' in file:# and ('cell' in file.lower() or 'stim' in file.lower()):
-                basenames.append(file[:-1*file[::-1].find('_')-1])
-                try:
-                    fileindexs.append(int(file[-1*file[::-1].find('_'):file.find('.')]))
-                except:
-                    print('weird file index: {}'.format(file))
-                    fileindexs.append(-1)
-            else:
-                basenames.append(file[:file.find('.')])
-                fileindexs.append(-1)
-            exts.append(file[file.find('.'):])
-    tokeep = np.asarray(exts) != ''
-    files = np.asarray(files)[tokeep]
-    exts = np.asarray(exts)[tokeep]
-    basenames = np.asarray(basenames)[tokeep]
-    fileindexs = np.asarray(fileindexs)[tokeep]
-    out = {'dir':basedir,
-           'filenames':files,
-           'exts':exts,
-           'basenames':basenames,
-           'fileindices':fileindexs,
-           'dirs':dirs
-           }
-    #%
-    return out
 
 #%% this script will export behavior and pair it to imaging, then save it in a neat directory structure
 def export_pybpod_files(overwrite=False,behavior_export_basedir = '/home/rozmar/Data/Behavior/BCI_exported'):
@@ -447,57 +408,3 @@ def check_discrepancies_in_behavior_export():
                                         print('trialnum does not line up: {} vs {} in {} with {}'.format(trialnum,bitcode_trial_num,os.path.join(raw_session_dir,scanimagefile),h5file))
                                         print('timeoffset is {}'.format(timeoffset))
                                         
-def copy_1_tiff_file_in_order(source_movie_directory,target_movie_directory):
-    Path(target_movie_directory).mkdir(parents = True,exist_ok = True)
-    dirs_in_target_dir = os.listdir(target_movie_directory)
-
-    files_dict = extract_files_from_dir(source_movie_directory)
-    file_idxs = (files_dict['exts']=='.tif')
-    fnames = files_dict['filenames'][file_idxs]
-    file_indices = files_dict['fileindices'][file_idxs]
-    basenames = files_dict['basenames'][file_idxs]
-    order  = np.argsort(file_indices)
-    fnames = fnames[order]
-    basenames = basenames[order]
-    file_indices = file_indices[order]
-    uniquebasenames = np.unique(basenames)
-    for basename in uniquebasenames:
-        if 'stack' in basename:
-            needed = basenames != basename
-            basenames = basenames[needed]
-            fnames = fnames[needed]
-            file_indices = file_indices[needed]
-    uniquebasenames = np.unique(basenames)
-    start_times = list()
-    for basename in uniquebasenames:
-        fname = fnames[np.where(basename==basenames)[0][0]]
-        metadata = utils_imaging.extract_scanimage_metadata(os.path.join(files_dict['dir'],fname))
-        start_times.append(metadata['movie_start_time'])
-    order = np.argsort(start_times)  
-    fnames_new = list()
-    for idx in order:
-        fnames_new.append(fnames[basenames==uniquebasenames[idx]])
-    fnames = np.concatenate(fnames_new)
-    
-    #%
-    try:
-        file_dict = np.load(os.path.join(target_movie_directory,'copy_data.npy'),allow_pickle = True).tolist()
-    except:
-        file_dict = {'copied_files':list()}
-        
-    for fname in fnames:
-        if fname[:-4] not in dirs_in_target_dir: 
-            try:
-                metadata = utils_imaging.extract_scanimage_metadata(os.path.join(files_dict['dir'],fname))
-            except:
-                print('could not read metadata for {} - probably still in the making'.format(fname))
-                break
-            target_dir = os.path.join(target_movie_directory,fname[:-4])
-            Path(target_dir).mkdir(parents = True,exist_ok = True)
-            sourcefile = os.path.join(source_movie_directory,fname)
-            destfile = os.path.join(os.path.join(target_movie_directory,fname[:-4]),fname)
-            shutil.copyfile(sourcefile,destfile+'_tmp')
-            os.rename(destfile+'_tmp',destfile)
-            file_dict['copied_files'].append(fname)
-            np.save(os.path.join(target_movie_directory,'copy_data.npy'),file_dict)
-            break
