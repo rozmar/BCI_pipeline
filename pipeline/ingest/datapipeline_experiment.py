@@ -93,6 +93,7 @@ def populate_behavior():
             lickport_duration_key_list = list()
             trial_event_list = list()
             action_event_list = list()
+            trial_choice_list = list()
             for trial_num,trial_num_bpod in enumerate(bpoddata['trial_num']):
                 trial_event_id = 0
                 action_event_id = 0
@@ -167,7 +168,19 @@ def populate_behavior():
                         lickport_key['lickport_auto_step_freq'] += (bci_key['bci_minimum_voltage_out']/3.3)*bpoddata['zaber_max_speed'][trial_num]
                         bci_key_list.append(bci_key)  #we add this only if there is a scanimage file
                 
-                
+                if len(bpoddata['reward_L'][trial_num])>0:
+                    lickportchoice_key = {'subject_id':subject_id,
+                                          'session':session_num,
+                                          'trial':trial_num,
+                                          'lick_port':'left'}
+                    trial_choice_list.append(lickportchoice_key)
+                elif len(bpoddata['reward_R'][trial_num])>0:
+                    lickportchoice_key = {'subject_id':subject_id,
+                                      'session':session_num,
+                                      'trial':trial_num,
+                                      'lick_port':'right'}
+                    trial_choice_list.append(lickportchoice_key)
+                    
                 
                 if bpoddata['trial_hit'][trial_num]:
                     outcome = 'hit'
@@ -214,15 +227,16 @@ def populate_behavior():
                                        'trial_event_duration':0}
                     trial_event_list.append(trial_event_key)
                 
-                if len(bpoddata['threshold_crossing_times'][trial_num])>0:
+                
+                for step_t_now in bpoddata['zaber_move_forward'][trial_num]:
                     trial_event_id+=1
                     trial_event_key = {'subject_id':subject_id,
                                        'session':session_num,
                                        'trial':trial_num,
                                        'trial_event_id':trial_event_id,
-                                       'trial_event_type':'threshold cross',
-                                       'trial_event_time':bpoddata['threshold_crossing_times'][trial_num][0],
-                                       'trial_event_duration':0}
+                                       'trial_event_type':'lickport step',
+                                       'trial_event_time':step_t_now,
+                                       'trial_event_duration':bpoddata['zaber_trigger_step_time'][trial_num]}
                     trial_event_list.append(trial_event_key)
                 for reward_time in np.concatenate([bpoddata['reward_R'][trial_num],bpoddata['reward_L'][trial_num]]):
                     trial_event_id+=1
@@ -276,6 +290,8 @@ def populate_behavior():
                 experiment.BCISettings().insert(bci_key_list,allow_direct_insert=True)
                 experiment.ActionEvent().insert(action_event_list,allow_direct_insert=True)
                 experiment.TrialEvent().insert(trial_event_list,allow_direct_insert=True)
+                experiment.TrialLickportChoice().insert(trial_choice_list,allow_direct_insert=True)
+                
                 dj.conn().ping()
     # =============================================================================
     #             except dj.errors.DuplicateError:
