@@ -149,6 +149,13 @@ class BehaviorTrial(dj.Imported):
     free_water=0: bool  # "empty" trial with water given (go-cue not played, no trial structure) 
     """
 
+@schema
+class TrialLickportChoice(dj.Imported):
+    definition = """  
+    -> BehaviorTrial
+    ----
+    -> LickPort
+    """
 
 @schema
 class TrialEventType(dj.Lookup):
