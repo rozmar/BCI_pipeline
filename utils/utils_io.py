@@ -5,6 +5,7 @@ import numpy as np
 from ScanImageTiffReader import ScanImageTiffReader
 import json
 import datetime
+import time
 
 def extract_scanimage_metadata(file): # this is a duplicate function - also in utils_imaging
     #%
@@ -164,6 +165,12 @@ def extract_files_from_dir(basedir):
     #%
     return out
 
+def copy_tiff_files_in_loop(source_movie_directory,target_movie_directory):
+    while True:
+        copy_tiff_files_in_order(source_movie_directory,target_movie_directory)
+        time.sleep(5)
+        
+
 def copy_tiff_files_in_order(source_movie_directory,target_movie_directory):
     Path(target_movie_directory).mkdir(parents = True,exist_ok = True)
     dirs_in_target_dir = os.listdir(target_movie_directory)
@@ -203,7 +210,7 @@ def copy_tiff_files_in_order(source_movie_directory,target_movie_directory):
         file_dict = {'copied_files':list()}
         
     for fname in fnames:
-        if fname[:-4] not in dirs_in_target_dir: 
+        if fname not in file_dict['copied_files']:#dirs_in_target_dir: 
             try:
                 metadata = extract_scanimage_metadata(os.path.join(files_dict['dir'],fname))
             except:

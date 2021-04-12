@@ -222,10 +222,12 @@ def register_trial(target_movie_directory,file):
         
         
 def generate_mean_image_from_trials(target_movie_directory,trial_num_to_use):
+    #%
     with open(os.path.join(target_movie_directory,'s2p_params.json'), "r") as read_file:
         s2p_params = json.load(read_file)
     file_dict = np.load(os.path.join(target_movie_directory,'copy_data.npy'),allow_pickle = True).tolist()
-    metadata = extract_scanimage_metadata(file_dict['copied_files'][0])
+    file_now = file_dict['copied_files'][0]
+    metadata = extract_scanimage_metadata(os.path.join(target_movie_directory,file_now[:-4],file_now))
     pixelsize = metadata['roi_metadata'][0]['scanfields']['sizeXY']
     movie_dims = metadata['roi_metadata'][0]['scanfields']['pixelResolutionXY']
     zoomfactor = float(metadata['metadata']['hRoiManager']['scanZoomFactor'])
@@ -261,7 +263,7 @@ def generate_mean_image_from_trials(target_movie_directory,trial_num_to_use):
     ops['do_registration'] = 0
     ops['roidetect'] = False
     
-    
+    #%
     tiff_list = list()
     for file_now in file_dict['copied_files']:
         tiff_list.append(os.path.join(target_movie_directory,file_now[:-4],file_now))
@@ -269,6 +271,7 @@ def generate_mean_image_from_trials(target_movie_directory,trial_num_to_use):
             break
     ops['tiff_list'] = tiff_list
     ops['save_path0'] = target_movie_directory
+    #%
     run_s2p(ops)
     refImg = None
     raw = True
