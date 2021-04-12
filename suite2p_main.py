@@ -34,6 +34,7 @@ import os
 import threading
 import multiprocessing
 import numpy as np
+import shutil
 
 class RepeatedTimer(object):
     def __init__(self, interval, function, *args, **kwargs):
@@ -114,7 +115,7 @@ for file in file_dict['copied_files']:
         
     if reg_dict['registration_started']:
         continue
-    if on_cluster:
+    if on_cluster: # this part will spawn a worker for each trial
 # =============================================================================
 #         cluster_command_list = ['eval "$(conda shell.bash hook)"',
 #                                 'conda activate suite2p',
@@ -144,18 +145,72 @@ for file in file_dict['copied_files']:
                                 'conda activate suite2p',
                                 'cd ~/Scripts/Python/BCI_pipeline/',
                                 "python cluster_helper.py {} '\"{}\"' '\"{}\"'".format('utils_imaging.register_trial',target_movie_directory,file)]
-        
-        bash_command = r"bsub -n 1 -J BCI_register_{} -o /dev/null '{} > ~/Scripts/BCI_output.txt'".format(file,' && '.join(cluster_command_list))
-        #%
-        #time.sleep(3)
-        os.system(bash_command) #-e ~/home/Data/errors/BCI_registration_error.txt #
+        cluster_output_file = os.path.join(dir_now,'s2p_registration_output.txt')
+        bash_command = r"bsub -n 1 -J BCI_register_{} -o /dev/null '{} > {}'".format(file,' && '.join(cluster_command_list),cluster_output_file)
+        os.system(bash_command)
         print('starting {}'.format(file))
     else:
-        utils_imaging.register_trial(target_movie_directory,file) # this should spawn a worker instead
+        utils_imaging.register_trial(target_movie_directory,file) 
     
-#%%
 
 #%% generate concatenated binary file 
+import shutil
+
+concatenated_movie_dir = os.path.join(target_movie_directory,'_concatenated_movie')
+concatenated_movie_file = os.path.join(target_movie_directory,'_concatenated_movie','data.bin')
+concatenated_movie_ops = os.path.join(target_movie_directory,'_concatenated_movie','ops.npy')
+Path(concatenated_movie_dir).mkdir(parents = True,exist_ok = True)
+file_dict = np.load(os.path.join(target_movie_directory,'copy_data.npy'),allow_pickle = True).tolist()
+for file_idx,file in enumerate(file_dict['copied_files']):
+    print(file)
+    dir_now = os.path.join(target_movie_directory,file[:-4])
+    if 'reg_progress.json' not in os.listdir(dir_now):
+        print('no json file for {}'.format(file))
+        break
+    with open(os.path.join(dir_now,'reg_progress.json'), "r") as read_file:
+        reg_dict = json.load(read_file)
+    if 'registration_finished' not in reg_dict.keys():
+        break
+    if not reg_dict['registration_finished']:
+        break
+    ops = np.load(os.path.join(dir_now,'suite2p','plane0','ops.npy'),allow_pickle = True).tolist()
+    sourcefile = os.path.join(dir_now,'suite2p','plane0','data.bin')
+    if file_idx == 0: #the first one is copied
+        shutil.copy(sourcefile,concatenated_movie_file)
+        np.save(concatenated_movie_ops,ops)
+    else:
+        
+        
+        with open(concatenated_movie_file, "ab") as myfile, open(sourcefile, "rb") as file2:
+            myfile.write(file2.read())
+        #%%
+        nimgbatch = min(ops['batch_size'], 1000)
+        nframes = int(ops['nframes'])
+        Ly = ops['Ly']
+        Lx = ops['Lx']
+        
+        reg_file = open(concatenated_movie_file, 'rb')
+        nimgbatch = int(nimgbatch)
+        block_size = Ly*Lx*nimgbatch*2
+        ix = 0
+        data = 1
+    
+        while data is not None:
+            buff = reg_file.read(block_size)
+            data = np.frombuffer(buff, dtype=np.int16, offset=0)
+            nimg = int(np.floor(data.size / (Ly*Lx)))
+            if nimg == 0:
+                break
+            data = np.reshape(data, (-1, Ly, Lx))
+            data_prev = data
+
+            
+        reg_file.close()
+        #%%
+        
+        break
+        
+    #tiff_now = os.path.join(target_movie_directory,file[:-4],file)
 
 #%% run cell detection on concatenated binary file
 
