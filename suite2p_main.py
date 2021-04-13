@@ -1,7 +1,9 @@
 #%% define session and suite2p working dir
-source_movie_directory_base = '/home/rozmar/Data/Calcium_imaging/raw/'
-target_movie_directory_base = '/home/rozmar/Data/temp/suite2p/'
-source_movie_directory = '/home/rozmar/Data/Calcium_imaging/raw/DOM3-MMIMS/BCI_07/2021-02-15/'
+# =============================================================================
+# source_movie_directory_base = '/home/rozmar/Data/Calcium_imaging/raw/'
+# target_movie_directory_base = '/home/rozmar/Data/temp/suite2p/'
+# source_movie_directory = '/home/rozmar/Data/Calcium_imaging/raw/DOM3-MMIMS/BCI_07/2021-02-15/'
+# =============================================================================
 
 # =============================================================================
 # source_movie_directory_base = '/run/user/62266/gvfs/sftp:host=10.102.10.46/home/rozmar/Data/Calcium_imaging/raw/'
@@ -9,9 +11,14 @@ source_movie_directory = '/home/rozmar/Data/Calcium_imaging/raw/DOM3-MMIMS/BCI_0
 # source_movie_directory = '/run/user/62266/gvfs/sftp:host=10.102.10.46/home/rozmar/Data/Calcium_imaging/raw/DOM3-MMIMS/BCI_07/2021-02-15/'
 # =============================================================================
 
-#source_movie_directory_base = '/run/user/62266/gvfs/sftp:host=10.102.10.46/home/rozmar/Data/Calcium_imaging/raw/'
-target_movie_directory_base = '/groups/svoboda/home/rozsam/Data/BCI_data/'
-#source_movie_directory = '/run/user/62266/gvfs/sftp:host=10.102.10.46/home/rozmar/Data/Calcium_imaging/raw/DOM3-MMIMS/BCI_07/2021-02-15/'
+# =============================================================================
+# #source_movie_directory_base = '/run/user/62266/gvfs/sftp:host=10.102.10.46/home/rozmar/Data/Calcium_imaging/raw/'
+# target_movie_directory_base = '/groups/svoboda/home/rozsam/Data/BCI_data/'
+# #source_movie_directory = '/run/user/62266/gvfs/sftp:host=10.102.10.46/home/rozmar/Data/Calcium_imaging/raw/DOM3-MMIMS/BCI_07/2021-02-15/'
+# =============================================================================
+
+target_movie_directory_base = '/home/rozmar/Data/temp/suite2p/'
+
 setup = 'DOM3-MMIMS'
 subject = 'BCI_07'
 session = '2021-02-15'
@@ -129,6 +136,7 @@ for file in file_dict['copied_files']:
         
     if reg_dict['registration_started']:
         continue
+    print('starting {}'.format(file))
     if on_cluster: # this part will spawn a worker for each trial
 # =============================================================================
 #         cluster_command_list = ['eval "$(conda shell.bash hook)"',
@@ -162,7 +170,7 @@ for file in file_dict['copied_files']:
         cluster_output_file = os.path.join(dir_now,'s2p_registration_output.txt')
         bash_command = r"bsub -n 1 -J BCI_register_{} -o /dev/null '{} > {}'".format(file,' && '.join(cluster_command_list),cluster_output_file)
         os.system(bash_command)
-        print('starting {}'.format(file))
+        
     else:
         utils_imaging.register_trial(target_movie_directory,file) 
     
@@ -198,8 +206,28 @@ for file_idx,file in enumerate(file_dict['copied_files']):
         
         with open(concatenated_movie_file, "ab") as myfile, open(sourcefile, "rb") as file2:
             myfile.write(file2.read())
+        #%
+        
+        ops_concatenated = np.load(concatenated_movie_ops,allow_pickle = True).tolist()
+        #%
+        for key in ops.keys():
+            addlist = False
+            try:
+                if ops[key]!=ops_concatenated[key]:
+                    addlist = True
+                    #print(key)
+            except:
+                addlist = True
+                #print('error:' + key)
+            if not addlist:
+                continue
+            if file_idx == 1:
+                 ops_concatenated[key+'_list'] = [ops_concatenated[key]]
+            ops_concatenated[key+'_list'].append(ops[key])  
+        np.save(concatenated_movie_ops,ops_concatenated)
+                
+        #%
 # =============================================================================
-#         #%%
 #         nimgbatch = min(ops['batch_size'], 1000)
 #         nframes = int(ops['nframes'])
 #         Ly = ops['Ly']
@@ -222,10 +250,10 @@ for file_idx,file in enumerate(file_dict['copied_files']):
 # 
 #             
 #         reg_file.close()
-#         #%%
 # =============================================================================
+        #%
         
-        break
+        #break
         
     #tiff_now = os.path.join(target_movie_directory,file[:-4],file)
 
