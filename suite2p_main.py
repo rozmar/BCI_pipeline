@@ -1,8 +1,12 @@
 #%% define session and suite2p working dir
+source_movie_directory_base = '/home/rozmar/Data/Calcium_imaging/raw/'
+target_movie_directory_base = '/home/rozmar/Data/temp/suite2p/'
+source_movie_directory = '/home/rozmar/Data/Calcium_imaging/raw/DOM3-MMIMS/BCI_07/2021-02-15/'
+
 # =============================================================================
-# source_movie_directory_base = '/home/rozmar/Data/Calcium_imaging/raw/'
-# target_movie_directory_base = '/home/rozmar/Data/temp/suite2p/'
-# source_movie_directory = '/home/rozmar/Data/Calcium_imaging/raw/DOM3-MMIMS/BCI_07/2021-02-15/'
+# source_movie_directory_base = '/run/user/62266/gvfs/sftp:host=10.102.10.46/home/rozmar/Data/Calcium_imaging/raw/'
+# target_movie_directory_base = '/groups/svoboda/home/rozsam/Data/BCI_data/'
+# source_movie_directory = '/run/user/62266/gvfs/sftp:host=10.102.10.46/home/rozmar/Data/Calcium_imaging/raw/DOM3-MMIMS/BCI_07/2021-02-15/'
 # =============================================================================
 
 #source_movie_directory_base = '/run/user/62266/gvfs/sftp:host=10.102.10.46/home/rozmar/Data/Calcium_imaging/raw/'
@@ -19,7 +23,7 @@ s2p_params = {'max_reg_shift':50, # microns
               'overwrite': False,
               'num_workers':4} # folder where the suite2p output is saved
 
-on_cluster = True
+on_cluster = False
 #%% import libraries
 if on_cluster:
     
