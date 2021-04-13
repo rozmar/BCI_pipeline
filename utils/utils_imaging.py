@@ -262,7 +262,7 @@ def generate_mean_image_from_trials(target_movie_directory,trial_num_to_use):
     ops['batch_size'] = 250
     ops['do_registration'] = 0
     ops['roidetect'] = False
-    
+    ops['do_bidiphase'] = True
     #%
     tiff_list = list()
     for file_now in file_dict['copied_files']:

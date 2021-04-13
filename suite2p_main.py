@@ -96,7 +96,7 @@ trial_num_to_use = 10
 #%
 if on_cluster:
     cluster_command_list = ['eval "$(conda shell.bash hook)"',
-                            'conda activate bci',
+                            'conda activate suite2p',
                             'cd ~/Scripts/Python/BCI_pipeline/',
                             'python cluster_helper.py {} "\'{}\'" {}'.format('utils_imaging.generate_mean_image_from_trials',target_movie_directory,trial_num_to_use)]
     with open("/groups/svoboda/home/rozsam/Scripts/runBCI.sh","w") as shfile:
@@ -152,7 +152,7 @@ for file in file_dict['copied_files']:
 # =============================================================================
         #%
         cluster_command_list = ['eval "$(conda shell.bash hook)"',
-                                'conda activate bci',
+                                'conda activate suite2p',
                                 'cd ~/Scripts/Python/BCI_pipeline/',
                                 "python cluster_helper.py {} '\"{}\"' '\"{}\"'".format('utils_imaging.register_trial',target_movie_directory,file)]
         cluster_output_file = os.path.join(dir_now,'s2p_registration_output.txt')
@@ -188,7 +188,7 @@ for file_idx,file in enumerate(file_dict['copied_files']):
     if file_idx == 0: #the first one is copied
         shutil.copy(sourcefile,concatenated_movie_file)
         np.save(concatenated_movie_ops,ops)
-        break
+        #break
     else:
         
         
