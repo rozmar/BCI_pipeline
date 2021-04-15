@@ -339,3 +339,34 @@ def find_ROIs(full_movie_dir):
     ops['yrange'] = [np.max(ops['yrange'][::2]),np.min(ops['yrange'][1::2])]
     #np.save(os.path.join(full_movie_dir,'ops.npy'),ops)
     run_plane(ops)
+    
+def registration_metrics(full_movie_dir):
+    #%%
+    ops_path = os.path.join(full_movie_dir,'ops.npy')
+    
+    ops = np.load(ops_path,allow_pickle = True).tolist()
+    #%
+    keys = list(ops.keys())
+    for key in keys:
+        if key.endswith('_list') and 'Img' in key:
+            ops[key[:-5]]=np.mean(ops[key],0)
+            #print(key)
+        elif key.endswith('_list'):
+            ops[key[:-5]]=ops[key]
+            #%
+    ops['do_registration'] = 0
+    ops['save_path'] = full_movie_dir
+    ops['allow_overlap'] = True
+    ops['nframes'] = np.sum(ops['nframes'])
+    ops['save_folder'] = ''
+    ops['save_path0'] = full_movie_dir
+    ops['fast_disk'] = full_movie_dir
+    ops['reg_file'] = os.path.join(full_movie_dir,'data.bin')
+    ops['roidetect'] = True
+    ops['ops_path'] = full_movie_dir
+    ops['xrange'] = [np.max(ops['xrange'][::2]),np.min(ops['xrange'][1::2])]
+    ops['yrange'] = [np.max(ops['yrange'][::2]),np.min(ops['yrange'][1::2])]
+    t0 = time.time()
+    ops = registration.get_pc_metrics(ops)
+    print('Registration metrics, %0.2f sec.' % time.time()-t0)
+    np.save(os.path.join(ops['save_path'], 'ops.npy'), ops)

@@ -17,7 +17,8 @@
 # #source_movie_directory = '/run/user/62266/gvfs/sftp:host=10.102.10.46/home/rozmar/Data/Calcium_imaging/raw/DOM3-MMIMS/BCI_07/2021-02-15/'
 # =============================================================================
 
-target_movie_directory_base = '/home/rozmar/Data/temp/suite2p/'
+#target_movie_directory_base = '/home/rozmar/Data/temp/suite2p/'
+target_movie_directory_base = '/groups/svoboda/home/rozsam/Data/BCI_data/'
 
 setup = 'DOM3-MMIMS'
 subject = 'BCI_07'
@@ -249,7 +250,7 @@ np.save(concatenated_movie_ops,ops_concatenated)
 #     shutil.copy(os.path.join(concatenated_movie_dir,file),os.path.join(full_movie_dir,file))
 # =============================================================================
 
-
+concatenated_movie_dir = os.path.join(target_movie_directory,'_concatenated_movie')
 full_movie_dir = concatenated_movie_dir
 cluster_command_list = ['eval "$(conda shell.bash hook)"',
                         'conda activate suite2p',
@@ -260,3 +261,14 @@ bash_command = r"bsub -n 2 -J BCI_ROIfind -o /dev/null '{} > {}'".format(' && '.
 os.system(bash_command)
 #%% stop deamons
 #copy_thread.kill()
+
+# =============================================================================
+# #%%
+# file_dict = np.load(os.path.join(target_movie_directory,'copy_data.npy'),allow_pickle = True).tolist()
+# for file_idx,file in enumerate(file_dict['copied_files']):
+#     
+#     dir_now = os.path.join(target_movie_directory,file[:-4])
+#     ops = np.load(os.path.join(dir_now,'suite2p','plane0','ops.npy'),allow_pickle = True).tolist()
+#     if len(ops['xoff']) != ops['nframes']:
+#         print([file,ops['nframes'],len(ops['xoff'])])
+# =============================================================================
