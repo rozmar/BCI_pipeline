@@ -7,7 +7,7 @@ import time
 from os import path
 
 from suite2p import default_ops as s2p_default_ops
-from suite2p import run_s2p, io,registration
+from suite2p import run_s2p, io,registration, run_plane
 #%%
 def extract_scanimage_metadata(file): # this function is also in utils_io
     #%
@@ -182,36 +182,43 @@ def register_trial(target_movie_directory,file):
     ops['data_path'] = target_movie_directory
     ops['tiff_list'] = [tiff_now]
     ops['batch_size'] = 250
-    ops['do_registration'] = 0
+    ops['do_registration'] = 1
     ops['roidetect'] = False
     meanimage_dict = np.load(os.path.join(target_movie_directory,'mean_image.npy'),allow_pickle = True).tolist()
     refImg = meanimage_dict['refImg']
+    ops['refImg'] = refImg
+    ops['force_refImg'] = True
     print('regstering {}'.format(tiff_now))
     ops = run_s2p(ops)
-    plane_times = {}
-    ######### REGISTRATION #########
-    t11=time.time()
-    print('----------- REGISTRATION')
-    ops = registration.register_binary(ops,refImg) # register binary
-    np.save(ops['ops_path'], ops)
-    plane_times['registration'] = time.time()-t11
-    print('----------- Total %0.2f sec' % plane_times['registration'])
-    if ops['two_step_registration'] and ops['keep_movie_raw']:
-        print('----------- REGISTRATION STEP 2')
-        print('(making mean image (excluding bad frames)')
-        refImg = registration.sampled_mean(ops)
-        ops = registration.register_binary(ops, refImg, raw=False)
-        np.save(ops['ops_path'], ops)
-        plane_times['two_step_registration'] = time.time()-t11
-        print('----------- Total %0.2f sec' % plane_times['two_step_registration'])
-
-    # compute metrics for registration
-    if ops.get('do_regmetrics', True) and ops['nframes']>=1500:
-        t0 = time.time()
-        ops = registration.get_pc_metrics(ops)
-        plane_times['registration_metrics'] = time.time()-t0
-        print('Registration metrics, %0.2f sec.' % plane_times['registration_metrics'])
-        np.save(os.path.join(ops['save_path'], 'ops.npy'), ops)
+# =============================================================================
+#     plane_times = {}
+#     ######### REGISTRATION #########
+#     t11=time.time()
+#     print('----------- REGISTRATION')
+#     ops = registration.register_binary(ops,refImg) # register binary
+#     np.save(ops['ops_path'], ops)
+#     plane_times['registration'] = time.time()-t11
+#     print('----------- Total %0.2f sec' % plane_times['registration'])
+#     if ops['two_step_registration'] and ops['keep_movie_raw']:
+#         print('----------- REGISTRATION STEP 2')
+#         print('(making mean image (excluding bad frames)')
+#         refImg = registration.sampled_mean(ops)
+#         ops = registration.register_binary(ops, refImg, raw=False)
+#         np.save(ops['ops_path'], ops)
+#         plane_times['two_step_registration'] = time.time()-t11
+#         print('----------- Total %0.2f sec' % plane_times['two_step_registration'])
+# 
+#     # compute metrics for registration
+#     if ops.get('do_regmetrics', True) and ops['nframes']>=1500:
+#         t0 = time.time()
+#         ops = registration.get_pc_metrics(ops)
+#         plane_times['registration_metrics'] = time.time()-t0
+#         print('Registration metrics, %0.2f sec.' % plane_times['registration_metrics'])
+#         np.save(os.path.join(ops['save_path'], 'ops.npy'), ops)
+# =============================================================================
+        
+        
+        
         
     with open(reg_json_file, "r") as read_file:
         reg_dict = json.load(read_file)
@@ -302,3 +309,33 @@ def generate_mean_image_from_trials(target_movie_directory,trial_num_to_use):
     ops['refImg'] = refImg
     meanimage_dict = {'refImg':refImg}
     np.save(os.path.join(target_movie_directory,'mean_image.npy'),meanimage_dict)        
+    
+    
+def find_ROIs(full_movie_dir):
+    #%
+    ops_path = os.path.join(full_movie_dir,'ops.npy')
+    
+    ops = np.load(ops_path,allow_pickle = True).tolist()
+    #%
+    keys = list(ops.keys())
+    for key in keys:
+        if key.endswith('_list') and 'Img' in key:
+            ops[key[:-5]]=np.mean(ops[key],0)
+            #print(key)
+        elif key.endswith('_list'):
+            ops[key[:-5]]=ops[key]
+            #%
+    ops['do_registration'] = 0
+    ops['save_path'] = full_movie_dir
+    ops['allow_overlap'] = True
+    ops['nframes'] = np.sum(ops['nframes'])
+    ops['save_folder'] = ''
+    ops['save_path0'] = full_movie_dir
+    ops['fast_disk'] = full_movie_dir
+    ops['reg_file'] = os.path.join(full_movie_dir,'data.bin')
+    ops['roidetect'] = True
+    ops['ops_path'] = full_movie_dir
+    ops['xrange'] = [np.max(ops['xrange'][::2]),np.min(ops['xrange'][1::2])]
+    ops['yrange'] = [np.max(ops['yrange'][::2]),np.min(ops['yrange'][1::2])]
+    #np.save(os.path.join(full_movie_dir,'ops.npy'),ops)
+    run_plane(ops)

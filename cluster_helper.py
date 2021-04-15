@@ -3,7 +3,7 @@ from utils import utils_imaging
 print(sys.argv)
 arguments = sys.argv[2:]
 command = sys.argv[1]
-if command == 'utils_imaging.register_trial':
+if command in ['utils_imaging.register_trial','utils_imaging.find_ROIs']: # all is string
     arguments_real = list()
     for argument in arguments:
         arguments_real.append('"'+argument+'"')
