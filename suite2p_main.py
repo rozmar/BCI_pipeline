@@ -199,16 +199,9 @@ for file_idx,file in enumerate(file_dict['copied_files']):
     else:
         with open(concatenated_movie_file, "ab") as myfile, open(sourcefile, "rb") as file2:
             myfile.write(file2.read())
-<<<<<<< HEAD
         if not concatenated_ops_loaded:
             ops_concatenated = np.load(concatenated_movie_ops,allow_pickle = True).tolist()
             concatenated_ops_loaded = True
-=======
-        #%
-        
-        ops_concatenated = np.load(concatenated_movie_ops,allow_pickle = True).tolist()
->>>>>>> f8d8e3e777587244e00a58517617cf5a9990d610
-        #%
         for key in ops.keys():
             addlist = False
             try:
@@ -221,7 +214,7 @@ for file_idx,file in enumerate(file_dict['copied_files']):
             if not addlist:
                 continue
             if file_idx == 1:
-<<<<<<< HEAD
+                
                  ops_concatenated[key+'_list'] = ops_concatenated[key]
             #%
             try: # ref and mean images have to be concatenated in a different way
@@ -244,42 +237,7 @@ for file_idx,file in enumerate(file_dict['copied_files']):
 with open(concatenated_movie_filelist_json, "w") as data_file:
     json.dump(filelist_dict, data_file, indent=2)
 np.save(concatenated_movie_ops,ops_concatenated)        
-=======
-                 ops_concatenated[key+'_list'] = [ops_concatenated[key]]
-            ops_concatenated[key+'_list'].append(ops[key])  
-        np.save(concatenated_movie_ops,ops_concatenated)
-                
-        #%
-# =============================================================================
-#         nimgbatch = min(ops['batch_size'], 1000)
-#         nframes = int(ops['nframes'])
-#         Ly = ops['Ly']
-#         Lx = ops['Lx']
-#         
-#         reg_file = open(concatenated_movie_file, 'rb')
-#         nimgbatch = int(nimgbatch)
-#         block_size = Ly*Lx*nimgbatch*2
-#         ix = 0
-#         data = 1
-#     
-#         while data is not None:
-#             buff = reg_file.read(block_size)
-#             data = np.frombuffer(buff, dtype=np.int16, offset=0)
-#             nimg = int(np.floor(data.size / (Ly*Lx)))
-#             if nimg == 0:
-#                 break
-#             data = np.reshape(data, (-1, Ly, Lx))
-#             data_prev = data
-# 
-#             
-#         reg_file.close()
-# =============================================================================
-        #%
-        
-        #break
-        
->>>>>>> f8d8e3e777587244e00a58517617cf5a9990d610
-    #tiff_now = os.path.join(target_movie_directory,file[:-4],file)
+
 
 #%% run cell detection on concatenated binary file
 
