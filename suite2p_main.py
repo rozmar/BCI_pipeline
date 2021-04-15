@@ -1,7 +1,9 @@
 #%% define session and suite2p working dir
-source_movie_directory_base = '/home/rozmar/Data/Calcium_imaging/raw/'
-target_movie_directory_base = '/home/rozmar/Data/temp/suite2p/'
-source_movie_directory = '/home/rozmar/Data/Calcium_imaging/raw/DOM3-MMIMS/BCI_07/2021-02-15/'
+# =============================================================================
+# source_movie_directory_base = '/home/rozmar/Data/Calcium_imaging/raw/'
+# target_movie_directory_base = '/home/rozmar/Data/temp/suite2p/'
+# source_movie_directory = '/home/rozmar/Data/Calcium_imaging/raw/DOM3-MMIMS/BCI_07/2021-02-15/'
+# =============================================================================
 
 # =============================================================================
 # source_movie_directory_base = '/run/user/62266/gvfs/sftp:host=10.102.10.46/home/rozmar/Data/Calcium_imaging/raw/'
@@ -9,9 +11,14 @@ source_movie_directory = '/home/rozmar/Data/Calcium_imaging/raw/DOM3-MMIMS/BCI_0
 # source_movie_directory = '/run/user/62266/gvfs/sftp:host=10.102.10.46/home/rozmar/Data/Calcium_imaging/raw/DOM3-MMIMS/BCI_07/2021-02-15/'
 # =============================================================================
 
-#source_movie_directory_base = '/run/user/62266/gvfs/sftp:host=10.102.10.46/home/rozmar/Data/Calcium_imaging/raw/'
-target_movie_directory_base = '/groups/svoboda/home/rozsam/Data/BCI_data/'
-#source_movie_directory = '/run/user/62266/gvfs/sftp:host=10.102.10.46/home/rozmar/Data/Calcium_imaging/raw/DOM3-MMIMS/BCI_07/2021-02-15/'
+# =============================================================================
+# #source_movie_directory_base = '/run/user/62266/gvfs/sftp:host=10.102.10.46/home/rozmar/Data/Calcium_imaging/raw/'
+# target_movie_directory_base = '/groups/svoboda/home/rozsam/Data/BCI_data/'
+# #source_movie_directory = '/run/user/62266/gvfs/sftp:host=10.102.10.46/home/rozmar/Data/Calcium_imaging/raw/DOM3-MMIMS/BCI_07/2021-02-15/'
+# =============================================================================
+
+target_movie_directory_base = '/home/rozmar/Data/temp/suite2p/'
+
 setup = 'DOM3-MMIMS'
 subject = 'BCI_07'
 session = '2021-02-15'
@@ -135,6 +142,7 @@ for file in file_dict['copied_files']:
         
     if reg_dict['registration_started']:
         continue
+    print('starting {}'.format(file))
     if on_cluster: # this part will spawn a worker for each trial
         #%
         cluster_command_list = ['eval "$(conda shell.bash hook)"',
@@ -144,7 +152,7 @@ for file in file_dict['copied_files']:
         cluster_output_file = os.path.join(dir_now,'s2p_registration_output.txt')
         bash_command = r"bsub -n 1 -J BCI_register_{} -o /dev/null '{} > {}'".format(file,' && '.join(cluster_command_list),cluster_output_file)
         os.system(bash_command)
-        print('starting {}'.format(file))
+        
     else:
         utils_imaging.register_trial(target_movie_directory,file) 
     
@@ -191,9 +199,15 @@ for file_idx,file in enumerate(file_dict['copied_files']):
     else:
         with open(concatenated_movie_file, "ab") as myfile, open(sourcefile, "rb") as file2:
             myfile.write(file2.read())
+<<<<<<< HEAD
         if not concatenated_ops_loaded:
             ops_concatenated = np.load(concatenated_movie_ops,allow_pickle = True).tolist()
             concatenated_ops_loaded = True
+=======
+        #%
+        
+        ops_concatenated = np.load(concatenated_movie_ops,allow_pickle = True).tolist()
+>>>>>>> f8d8e3e777587244e00a58517617cf5a9990d610
         #%
         for key in ops.keys():
             addlist = False
@@ -207,6 +221,7 @@ for file_idx,file in enumerate(file_dict['copied_files']):
             if not addlist:
                 continue
             if file_idx == 1:
+<<<<<<< HEAD
                  ops_concatenated[key+'_list'] = ops_concatenated[key]
             #%
             try: # ref and mean images have to be concatenated in a different way
@@ -229,6 +244,41 @@ for file_idx,file in enumerate(file_dict['copied_files']):
 with open(concatenated_movie_filelist_json, "w") as data_file:
     json.dump(filelist_dict, data_file, indent=2)
 np.save(concatenated_movie_ops,ops_concatenated)        
+=======
+                 ops_concatenated[key+'_list'] = [ops_concatenated[key]]
+            ops_concatenated[key+'_list'].append(ops[key])  
+        np.save(concatenated_movie_ops,ops_concatenated)
+                
+        #%
+# =============================================================================
+#         nimgbatch = min(ops['batch_size'], 1000)
+#         nframes = int(ops['nframes'])
+#         Ly = ops['Ly']
+#         Lx = ops['Lx']
+#         
+#         reg_file = open(concatenated_movie_file, 'rb')
+#         nimgbatch = int(nimgbatch)
+#         block_size = Ly*Lx*nimgbatch*2
+#         ix = 0
+#         data = 1
+#     
+#         while data is not None:
+#             buff = reg_file.read(block_size)
+#             data = np.frombuffer(buff, dtype=np.int16, offset=0)
+#             nimg = int(np.floor(data.size / (Ly*Lx)))
+#             if nimg == 0:
+#                 break
+#             data = np.reshape(data, (-1, Ly, Lx))
+#             data_prev = data
+# 
+#             
+#         reg_file.close()
+# =============================================================================
+        #%
+        
+        #break
+        
+>>>>>>> f8d8e3e777587244e00a58517617cf5a9990d610
     #tiff_now = os.path.join(target_movie_directory,file[:-4],file)
 
 #%% run cell detection on concatenated binary file
