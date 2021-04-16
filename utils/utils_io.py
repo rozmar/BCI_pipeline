@@ -225,3 +225,115 @@ def copy_tiff_files_in_order(source_movie_directory,target_movie_directory):
             file_dict['copied_files'].append(fname)
             np.save(os.path.join(target_movie_directory,'copy_data.npy'),file_dict)
             #break
+
+
+def concatenate_suite2p_files(target_movie_directory):
+    #%%
+    concatenated_ops_loaded = False
+    concatenated_movie_dir = os.path.join(target_movie_directory,'_concatenated_movie')
+    Path(concatenated_movie_dir).mkdir(parents = True,exist_ok = True)
+    concatenated_movie_file = os.path.join(target_movie_directory,'_concatenated_movie','data.bin')
+    concatenated_movie_ops = os.path.join(target_movie_directory,'_concatenated_movie','ops.npy')
+    concatenated_movie_filelist_json = os.path.join(target_movie_directory,'_concatenated_movie','filelist.json')
+    try:
+        with open(concatenated_movie_filelist_json, "r") as read_file:
+            filelist_dict = json.load(read_file)
+    except:
+        filelist_dict = {'file_name_list' : [],
+                         'frame_num_list' :[],
+                         'file_added_time':[],
+                         'concatenation_underway':True}
+    file_dict = np.load(os.path.join(target_movie_directory,'copy_data.npy'),allow_pickle = True).tolist()
+    for file_idx,file in enumerate(file_dict['copied_files']):
+# =============================================================================
+#         if file == 'openLoop_00004.tif':
+#             break
+# =============================================================================
+        #try:
+            #%%
+        print(file)
+        dir_now = os.path.join(target_movie_directory,file[:-4])
+        if 'reg_progress.json' not in os.listdir(dir_now):
+            print('no json file for {}'.format(file))
+            break
+        with open(os.path.join(dir_now,'reg_progress.json'), "r") as read_file:
+            reg_dict = json.load(read_file)
+        if 'registration_finished' not in reg_dict.keys():
+            print('registration is not done, stopped at {}'.format(file))
+            break
+        if not reg_dict['registration_finished']:
+            print('registration is not done, stopped at {}'.format(file))
+            break
+        if file in filelist_dict['file_name_list']: # skip files that are already added
+            continue
+        ops = np.load(os.path.join(dir_now,'suite2p','plane0','ops.npy'),allow_pickle = True).tolist()
+        sourcefile = os.path.join(dir_now,'suite2p','plane0','data.bin')
+        #%
+        if file_idx == 0: #the first one is copied
+            shutil.copy(sourcefile,concatenated_movie_file)
+            np.save(concatenated_movie_ops,ops)
+            filelist_dict['file_name_list'].append(file)
+            filelist_dict['frame_num_list'].append(ops['nframes'])
+            filelist_dict['file_added_time'].append(str(datetime.datetime.now()))
+            filelist_dict['concatenation_underway'] = True
+        else:
+            #%
+            with open(concatenated_movie_file, "ab") as myfile, open(sourcefile, "rb") as file2:
+                myfile.write(file2.read())
+            if not concatenated_ops_loaded:
+                ops_concatenated = np.load(concatenated_movie_ops,allow_pickle = True).tolist()
+                concatenated_ops_loaded = True
+                #%%
+            for key in ops.keys():
+                #%%
+                addlist = False
+                try:
+                    if ops[key]!=ops_concatenated[key] or key in ['xrange','yrange','nframes','frames_per_file','frames_per_folder']:
+                        addlist = True
+                        #print(key)
+                except:
+                    addlist = True
+                    #print('error:' + key)
+                #%%
+                if not addlist:
+                    continue
+                if file_idx == 1:
+                     ops_concatenated[key+'_list'] = ops_concatenated[key]
+                #%
+                skipit = False
+                try: # ref and mean images have to be concatenated in a different way
+                    if ops['Lx'] in ops[key].shape and ops['Ly'] in ops[key].shape:
+                        ops_concatenated[key+'_list'] = (ops_concatenated[key+'_list']*(file_idx+1) + ops[key])/(file_idx+2)
+                        skipit = True
+                except:
+                    pass
+                if not skipit:
+                    try:
+                        ops_concatenated[key+'_list'] = np.concatenate([ops_concatenated[key+'_list'],ops[key]])  
+                    except:
+                        try:
+                            ops_concatenated[key+'_list'] = np.concatenate([ops_concatenated[key+'_list'],[ops[key]]])
+                        except:
+                            ops_concatenated[key+'_list'] = np.concatenate([[ops_concatenated[key+'_list']],[ops[key]]])
+                
+                    
+                    
+            #%%        
+            
+            filelist_dict['file_name_list'].append(file)
+            filelist_dict['frame_num_list'].append(ops['nframes'])
+            filelist_dict['file_added_time'].append(str(datetime.datetime.now()))
+            filelist_dict['concatenation_underway'] = True
+            with open(concatenated_movie_filelist_json, "w") as data_file:
+                json.dump(filelist_dict, data_file, indent=2)
+            #np.save(concatenated_movie_ops,ops_concatenated)        
+                
+                #break
+# =============================================================================
+#         except:
+#             print('error occured, progress saved nonetheless')
+# =============================================================================
+    filelist_dict['concatenation_underway'] = False
+    with open(concatenated_movie_filelist_json, "w") as data_file:
+        json.dump(filelist_dict, data_file, indent=2)
+    np.save(concatenated_movie_ops,ops_concatenated)        

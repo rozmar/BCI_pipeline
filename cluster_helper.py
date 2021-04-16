@@ -1,9 +1,9 @@
 import sys
-from utils import utils_imaging
+from utils import utils_imaging, utils_io
 print(sys.argv)
 arguments = sys.argv[2:]
 command = sys.argv[1]
-if command in ['utils_imaging.register_trial','utils_imaging.find_ROIs']: # all is string
+if command in ['utils_imaging.register_trial','utils_imaging.find_ROIs','utils_imaging.registration_metrics','utils_io.concatenate_suite2p_files']: # all is string
     arguments_real = list()
     for argument in arguments:
         arguments_real.append('"'+argument+'"')

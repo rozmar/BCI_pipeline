@@ -154,6 +154,8 @@ def register_trial(target_movie_directory,file):
     
     XFOV = 1500*np.exp(-zoomfactor/11.5)+88 # HOTFIX for 16x objective
     pixelsize_real =  XFOV/movie_dims[0]
+    print('pixel size changed from {} to {} '.format(pixelsize,pixelsize_real))
+    pixelsize = pixelsize_real
     
     FOV = np.min(pixelsize)*np.asarray(movie_dims)
     ops = s2p_default_ops()#run_s2p.default_ops()
@@ -241,6 +243,8 @@ def generate_mean_image_from_trials(target_movie_directory,trial_num_to_use):
     
     XFOV = 1500*np.exp(-zoomfactor/11.5)+88 # HOTFIX for 16x objective
     pixelsize_real =  XFOV/movie_dims[0]
+    print('pixel size changed from {} to {} '.format(pixelsize,pixelsize_real))
+    pixelsize = pixelsize_real
     
     FOV = np.min(pixelsize)*np.asarray(movie_dims)
     ops = s2p_default_ops()#run_s2p.default_ops()
@@ -312,7 +316,7 @@ def generate_mean_image_from_trials(target_movie_directory,trial_num_to_use):
     
     
 def find_ROIs(full_movie_dir):
-    #%
+    #%%
     ops_path = os.path.join(full_movie_dir,'ops.npy')
     
     ops = np.load(ops_path,allow_pickle = True).tolist()
@@ -320,7 +324,7 @@ def find_ROIs(full_movie_dir):
     keys = list(ops.keys())
     for key in keys:
         if key.endswith('_list') and 'Img' in key:
-            ops[key[:-5]]=np.mean(ops[key],0)
+            ops[key[:-5]]=ops[key]
             #print(key)
         elif key.endswith('_list'):
             ops[key[:-5]]=ops[key]
@@ -337,9 +341,9 @@ def find_ROIs(full_movie_dir):
     ops['ops_path'] = full_movie_dir
     ops['xrange'] = [np.max(ops['xrange'][::2]),np.min(ops['xrange'][1::2])]
     ops['yrange'] = [np.max(ops['yrange'][::2]),np.min(ops['yrange'][1::2])]
-    #np.save(os.path.join(full_movie_dir,'ops.npy'),ops)
+    #%% #np.save(os.path.join(full_movie_dir,'ops.npy'),ops)
     run_plane(ops)
-    
+    #%%
 def registration_metrics(full_movie_dir):
     #%%
     ops_path = os.path.join(full_movie_dir,'ops.npy')
@@ -349,7 +353,7 @@ def registration_metrics(full_movie_dir):
     keys = list(ops.keys())
     for key in keys:
         if key.endswith('_list') and 'Img' in key:
-            ops[key[:-5]]=np.mean(ops[key],0)
+            ops[key[:-5]]=ops[key]
             #print(key)
         elif key.endswith('_list'):
             ops[key[:-5]]=ops[key]
@@ -368,5 +372,5 @@ def registration_metrics(full_movie_dir):
     ops['yrange'] = [np.max(ops['yrange'][::2]),np.min(ops['yrange'][1::2])]
     t0 = time.time()
     ops = registration.get_pc_metrics(ops)
-    print('Registration metrics, %0.2f sec.' % time.time()-t0)
+    #print('Registration metrics, %0.2f sec.' % time.time()-t0)
     np.save(os.path.join(ops['save_path'], 'ops.npy'), ops)

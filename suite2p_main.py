@@ -20,9 +20,16 @@
 #target_movie_directory_base = '/home/rozmar/Data/temp/suite2p/'
 target_movie_directory_base = '/groups/svoboda/home/rozsam/Data/BCI_data/'
 
-setup = 'DOM3-MMIMS'
-subject = 'BCI_07'
-session = '2021-02-15'
+# =============================================================================
+# setup = 'DOM3-MMIMS'
+# subject = 'BCI_07'
+# session = '2021-02-15'
+# =============================================================================
+
+setup = 'KayvonScope'
+subject = 'BCI_03'
+session = '121420'
+
 s2p_params = {'max_reg_shift':50, # microns
               'max_reg_shift_NR': 20, # microns
               'block_size': 200, # microns
@@ -49,7 +56,7 @@ import threading
 import multiprocessing
 import numpy as np
 import shutil
-
+import datetime
 class RepeatedTimer(object):
     def __init__(self, interval, function, *args, **kwargs):
         self._timer     = None
@@ -159,85 +166,23 @@ for file in file_dict['copied_files']:
     
 
 #%% generate concatenated binary file 
-import shutil
-concatenated_ops_loaded = False
 concatenated_movie_dir = os.path.join(target_movie_directory,'_concatenated_movie')
 Path(concatenated_movie_dir).mkdir(parents = True,exist_ok = True)
-concatenated_movie_file = os.path.join(target_movie_directory,'_concatenated_movie','data.bin')
-concatenated_movie_ops = os.path.join(target_movie_directory,'_concatenated_movie','ops.npy')
-concatenated_movie_filelist_json = os.path.join(target_movie_directory,'_concatenated_movie','filelist.json')
-try:
-    with open(concatenated_movie_filelist_json, "r") as read_file:
-        filelist_dict = json.load(read_file)
-except:
-    filelist_dict = {'file_name_list' : [],
-                     'frame_num_list' :[]}
-file_dict = np.load(os.path.join(target_movie_directory,'copy_data.npy'),allow_pickle = True).tolist()
-for file_idx,file in enumerate(file_dict['copied_files']):
-    print(file)
-    dir_now = os.path.join(target_movie_directory,file[:-4])
-    if 'reg_progress.json' not in os.listdir(dir_now):
-        print('no json file for {}'.format(file))
-        break
-    with open(os.path.join(dir_now,'reg_progress.json'), "r") as read_file:
-        reg_dict = json.load(read_file)
-    if 'registration_finished' not in reg_dict.keys():
-        print('registration is not done, stopped at {}'.format(file))
-        break
-    if not reg_dict['registration_finished']:
-        print('registration is not done, stopped at {}'.format(file))
-        break
-    if file in filelist_dict['file_name_list']: # skip files that are already added
-        continue
-    ops = np.load(os.path.join(dir_now,'suite2p','plane0','ops.npy'),allow_pickle = True).tolist()
-    sourcefile = os.path.join(dir_now,'suite2p','plane0','data.bin')
+#utils_io.concatenate_suite2p_files(target_movie_directory)
+
+if on_cluster: # this part will spawn a worker for each trial
+    #%
+    cluster_command_list = ['eval "$(conda shell.bash hook)"',
+                            'conda activate suite2p',
+                            'cd ~/Scripts/Python/BCI_pipeline/',
+                            "python cluster_helper.py {} '\"{}\"'".format('utils_io.concatenate_suite2p_files',target_movie_directory)]
+    cluster_output_file = os.path.join(os.path.join(target_movie_directory,'_concatenated_movie'),'s2p_concatenation_output.txt')
+    bash_command = r"bsub -n 1 -J BCI_concatenate_files '{} > {}'".format(' && '.join(cluster_command_list),cluster_output_file)
+    os.system(bash_command)
     
-    if file_idx == 0: #the first one is copied
-        shutil.copy(sourcefile,concatenated_movie_file)
-        np.save(concatenated_movie_ops,ops)
-        filelist_dict['file_name_list'].append(file)
-        filelist_dict['frame_num_list'].append(ops['nframes'])
-    else:
-        with open(concatenated_movie_file, "ab") as myfile, open(sourcefile, "rb") as file2:
-            myfile.write(file2.read())
-        if not concatenated_ops_loaded:
-            ops_concatenated = np.load(concatenated_movie_ops,allow_pickle = True).tolist()
-            concatenated_ops_loaded = True
-        for key in ops.keys():
-            addlist = False
-            try:
-                if ops[key]!=ops_concatenated[key]:
-                    addlist = True
-                    #print(key)
-            except:
-                addlist = True
-                #print('error:' + key)
-            if not addlist:
-                continue
-            if file_idx == 1:
-                
-                 ops_concatenated[key+'_list'] = ops_concatenated[key]
-            #%
-            try: # ref and mean images have to be concatenated in a different way
-                if ops['Lx'] in ops[key].shape and ops['Ly'] in ops[key].shape:
-                    ops_concatenated[key+'_list'] = np.concatenate([[ops_concatenated[key+'_list']],[ops[key]]])
-            except:
-                pass
-            #%
-            try:
-                ops_concatenated[key+'_list'] = np.concatenate([ops_concatenated[key+'_list'],ops[key]])  
-            except:
-                try:
-                    ops_concatenated[key+'_list'] = np.concatenate([ops_concatenated[key+'_list'],[ops[key]]])
-                except:
-                    ops_concatenated[key+'_list'] = np.concatenate([[ops_concatenated[key+'_list']],[ops[key]]])
+else:
+    utils_io.concatenate_suite2p_files(target_movie_directory)
 
-        filelist_dict['file_name_list'].append(file)
-        filelist_dict['frame_num_list'].append(ops['nframes'])
-
-with open(concatenated_movie_filelist_json, "w") as data_file:
-    json.dump(filelist_dict, data_file, indent=2)
-np.save(concatenated_movie_ops,ops_concatenated)        
 
 
 #%% run cell detection on concatenated binary file
@@ -252,13 +197,23 @@ np.save(concatenated_movie_ops,ops_concatenated)
 
 concatenated_movie_dir = os.path.join(target_movie_directory,'_concatenated_movie')
 full_movie_dir = concatenated_movie_dir
+#%
 cluster_command_list = ['eval "$(conda shell.bash hook)"',
                         'conda activate suite2p',
                         'cd ~/Scripts/Python/BCI_pipeline/',
                         "python cluster_helper.py {} '\"{}\"'".format('utils_imaging.find_ROIs',full_movie_dir)]
 cluster_output_file = os.path.join(full_movie_dir,'s2p_ROI_finding_output.txt')
-bash_command = r"bsub -n 2 -J BCI_ROIfind -o /dev/null '{} > {}'".format(' && '.join(cluster_command_list),cluster_output_file)
-os.system(bash_command)
+bash_command = r"bsub -n 2 -J BCI_ROIfind '{} > {}'".format(' && '.join(cluster_command_list),cluster_output_file)
+os.system(bash_command) # -o /dev/null
+
+#%% registration metrics
+cluster_command_list = ['eval "$(conda shell.bash hook)"',
+                        'conda activate suite2p',
+                        'cd ~/Scripts/Python/BCI_pipeline/',
+                        "python cluster_helper.py {} '\"{}\"'".format('utils_imaging.registration_metrics',full_movie_dir)]
+cluster_output_file = os.path.join(full_movie_dir,'s2p_registration_metrics_output.txt')
+bash_command = r"bsub -n 2 -J BCI_registration_metric '{} > {}'".format(' && '.join(cluster_command_list),cluster_output_file)
+os.system(bash_command) # -o /dev/null
 #%% stop deamons
 #copy_thread.kill()
 
