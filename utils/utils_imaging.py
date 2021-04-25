@@ -5,6 +5,7 @@ import datetime
 import os
 import time
 from os import path
+from scipy.ndimage import filters
 
 from suite2p import default_ops as s2p_default_ops
 from suite2p import run_s2p, io,registration, run_plane
@@ -380,3 +381,36 @@ def registration_metrics(full_movie_dir):
     ops = registration.get_pc_metrics(ops)
     #print('Registration metrics, %0.2f sec.' % time.time()-t0)
     np.save(os.path.join(ops['save_path'], 'ops.npy'), ops)
+    
+def export_dff(suite2p_dir):
+    
+
+    #%
+# =============================================================================
+#     suite2p_dir = '/home/rozmar/Data/Calcium_imaging/suite2p/DOM3-MMIMS/BCI_07/2021-02-15'
+#     suite2p_dir = '/home/rozmar/Data/Calcium_imaging/suite2p/KayvonScope/BCI_03/121420'
+#     suite2p_dir = '/home/rozmar/Data/Calcium_imaging/suite2p/KayvonScope/BCI_07/042121'
+# =============================================================================
+    
+    F = np.load(os.path.join(suite2p_dir,'F.npy'))
+    Fneu = np.load(os.path.join(suite2p_dir,'Fneu.npy'))
+    #iscell = np.load(os.path.join(suite2p_dir,'iscell.npy'))
+    ops = np.load(os.path.join(suite2p_dir,'ops.npy'),allow_pickle = True).tolist()
+    fs = ops['fs']
+    sig_baseline = 10 
+    win_baseline = int(60*fs)
+    #noncell = iscell[:,0] ==0
+    Fcorr= F-0.7*Fneu
+    to_correct = np.min(Fcorr,1)<1
+    Fcorr[to_correct,:] = Fcorr[to_correct,:]-np.min(Fcorr,1)[to_correct,np.newaxis]+1 # we don't allow anything to be below 0
+    #Fcorr[noncell] = 0
+    #%
+    Flow = filters.gaussian_filter(Fcorr,    [0., sig_baseline])
+    Flow = filters.minimum_filter1d(Flow,    win_baseline)
+    Flow = filters.maximum_filter1d(Flow,    win_baseline)
+    #%
+    dFF = (Fcorr-Flow)/Flow
+    #Fcorr[noncell] = 0
+    #%
+    np.save(os.path.join(suite2p_dir,'Fcorr.npy'),Fcorr )
+    np.save(os.path.join(suite2p_dir,'dFF.npy'),dFF )
