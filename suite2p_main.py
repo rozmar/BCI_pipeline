@@ -26,9 +26,28 @@ target_movie_directory_base = '/groups/svoboda/home/rozsam/Data/BCI_data/'
 # session = '2021-02-15'
 # =============================================================================
 
+# =============================================================================
+# setup = 'KayvonScope'
+# subject = 'BCI_03'
+# session = '121420'
+# =============================================================================
+
+# =============================================================================
+# setup = 'DOM3-MMIMS'
+# subject = 'BCI_08'
+# session = '2021-02-13'
+# =============================================================================
+
+
 setup = 'KayvonScope'
 subject = 'BCI_03'
 session = '121420'
+
+# =============================================================================
+# setup = 'KayvonScope'
+# subject = 'BCI_07'
+# session = '042121'
+# =============================================================================
 
 s2p_params = {'max_reg_shift':50, # microns
               'max_reg_shift_NR': 20, # microns
@@ -207,13 +226,16 @@ bash_command = r"bsub -n 2 -J BCI_ROIfind '{} > {}'".format(' && '.join(cluster_
 os.system(bash_command) # -o /dev/null
 
 #%% registration metrics
-cluster_command_list = ['eval "$(conda shell.bash hook)"',
-                        'conda activate suite2p',
-                        'cd ~/Scripts/Python/BCI_pipeline/',
-                        "python cluster_helper.py {} '\"{}\"'".format('utils_imaging.registration_metrics',full_movie_dir)]
-cluster_output_file = os.path.join(full_movie_dir,'s2p_registration_metrics_output.txt')
-bash_command = r"bsub -n 2 -J BCI_registration_metric '{} > {}'".format(' && '.join(cluster_command_list),cluster_output_file)
-os.system(bash_command) # -o /dev/null
+if on_cluster:
+    cluster_command_list = ['eval "$(conda shell.bash hook)"',
+                            'conda activate suite2p',
+                            'cd ~/Scripts/Python/BCI_pipeline/',
+                            "python cluster_helper.py {} '\"{}\"'".format('utils_imaging.registration_metrics',full_movie_dir)]
+    cluster_output_file = os.path.join(full_movie_dir,'s2p_registration_metrics_output.txt')
+    bash_command = r"bsub -n 2 -J BCI_registration_metric '{} > {}'".format(' && '.join(cluster_command_list),cluster_output_file)
+    os.system(bash_command) # -o /dev/null
+else:
+    utils_imaging.registration_metrics(full_movie_dir)    
 #%% stop deamons
 #copy_thread.kill()
 
@@ -227,3 +249,11 @@ os.system(bash_command) # -o /dev/null
 #     if len(ops['xoff']) != ops['nframes']:
 #         print([file,ops['nframes'],len(ops['xoff'])])
 # =============================================================================
+#%% z-stack analysis
+z_stack_dir = '/groups/svoboda/home/rozsam/Data/zstack/940/'
+z_stack_fname = os.listdir(z_stack_dir)[0]
+
+
+
+
+

@@ -328,10 +328,13 @@ def find_ROIs(full_movie_dir):
             #print(key)
         elif key.endswith('_list'):
             ops[key[:-5]]=ops[key]
+        if key.endswith('_list'):
+            ops.pop(key, None)
+            
             #%
     ops['do_registration'] = 0
     ops['save_path'] = full_movie_dir
-    ops['allow_overlap'] = True
+    ops['allow_overlap'] = False
     ops['nframes'] = np.sum(ops['nframes'])
     ops['save_folder'] = ''
     ops['save_path0'] = full_movie_dir
@@ -341,6 +344,7 @@ def find_ROIs(full_movie_dir):
     ops['ops_path'] = full_movie_dir
     ops['xrange'] = [np.max(ops['xrange'][::2]),np.min(ops['xrange'][1::2])]
     ops['yrange'] = [np.max(ops['yrange'][::2]),np.min(ops['yrange'][1::2])]
+    ops['save_mat']=1
     #%% #np.save(os.path.join(full_movie_dir,'ops.npy'),ops)
     run_plane(ops)
     #%%
@@ -357,6 +361,8 @@ def registration_metrics(full_movie_dir):
             #print(key)
         elif key.endswith('_list'):
             ops[key[:-5]]=ops[key]
+        if key.endswith('_list'):
+            ops.pop(key, None)
             #%
     ops['do_registration'] = 0
     ops['save_path'] = full_movie_dir

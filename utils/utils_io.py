@@ -253,6 +253,11 @@ def concatenate_suite2p_files(target_movie_directory):
             #%%
         print(file)
         dir_now = os.path.join(target_movie_directory,file[:-4])
+        try:
+            os.listdir(dir_now)
+        except:
+            print('no movie dir found')
+            break
         if 'reg_progress.json' not in os.listdir(dir_now):
             print('no json file for {}'.format(file))
             break
