@@ -47,9 +47,9 @@ def export_pybpod_files(overwrite=False,behavior_export_basedir = '/home/rozmar/
 # #%%
 #     overwrite=True
 #     behavior_export_basedir = '/home/rozmar/Data/Behavior/BCI_exported'
+#     
+#     #%%
 # =============================================================================
-    
-    #%%
     calcium_imaging_raw_basedir = dj.config['locations.imagingdata_raw']
     raw_behavior_dirs =  dj.config['locations.behavior_dirs_raw'] 
     
@@ -147,6 +147,7 @@ def export_pybpod_files(overwrite=False,behavior_export_basedir = '/home/rozmar/
                     nextfile_timestamps_all = list()
                     acqtrigger_timestamps_all = list()
                     trigger_arrived_timestamps_all = list()
+                    scanimage_integration_roi_data_all = list()
                     for basename in uniquebasenames:
                         #%
                         file_idxs_now = (files['exts']=='.tif') & (files['basenames']==basename)
@@ -196,6 +197,20 @@ def export_pybpod_files(overwrite=False,behavior_export_basedir = '/home/rozmar/
                                 print('not triggered')
                             else:
                                 trigger_arrived_timestamps_all.append(trigger_arrived_timestamp)
+                            try:
+                                integration_roi_data = {}
+                                integration_roi_data['outputChannelsEnabled'] = np.asarray(metadata['metadata']['hIntegrationRoiManager']['outputChannelsEnabled'].strip('[]').split(' '))=='true'
+                                integration_roi_data['outputChannelsNames'] = metadata['metadata']['hIntegrationRoiManager']['outputChannelsNames'].strip("{}").replace("'","").split(' ')
+                                integration_roi_data['outputChannelsRoiNames'] = eval(metadata['metadata']['hIntegrationRoiManager']['outputChannelsRoiNames'].replace('{','[').replace('}',']').replace(' ',','))
+                                integration_roi_data['outputChannelsFunctions'] = eval(metadata['metadata']['hIntegrationRoiManager']['outputChannelsFunctions'].replace('{','[').replace('}',']').replace(' ',','))
+                            except:
+                                integration_roi_data = {}
+                                integration_roi_data['outputChannelsEnabled'] = []
+                                integration_roi_data['outputChannelsNames'] = []
+                                integration_roi_data['outputChannelsRoiNames'] = []
+                                integration_roi_data['outputChannelsFunctions'] = []
+                                print('no ROI data')
+                            scanimage_integration_roi_data_all.append(integration_roi_data)
                                 #print('triggered')
                             
                     #%
@@ -204,6 +219,8 @@ def export_pybpod_files(overwrite=False,behavior_export_basedir = '/home/rozmar/
                     nextfile_timestamps_all= np.asarray(nextfile_timestamps_all)
                     acqtrigger_timestamps_all= np.asarray(acqtrigger_timestamps_all)
                     trigger_arrived_timestamps_all = np.asarray(trigger_arrived_timestamps_all)
+                    scanimage_integration_roi_data_all = np.asarray(scanimage_integration_roi_data_all)
+                    
                     file_order = np.argsort(frame_timestamps_all)
                     
                     filenames_all = filenames_all[file_order]
@@ -211,6 +228,7 @@ def export_pybpod_files(overwrite=False,behavior_export_basedir = '/home/rozmar/
                     nextfile_timestamps_all = nextfile_timestamps_all[file_order]
                     acqtrigger_timestamps_all = acqtrigger_timestamps_all[file_order]
                     trigger_arrived_timestamps_all = trigger_arrived_timestamps_all[file_order]
+                    scanimage_integration_roi_data_all = scanimage_integration_roi_data_all[file_order]
                     
                     istriggered = list()
                     for stamp in trigger_arrived_timestamps_all: istriggered.append(type(stamp)==datetime.datetime)
@@ -237,6 +255,9 @@ def export_pybpod_files(overwrite=False,behavior_export_basedir = '/home/rozmar/
                         bpod_trial_file_names = list()
                         bpod_scanimage_time_offset = list()
                         scanimage_frame_time_offset = list()
+                        for roikey in integration_roi_data.keys():
+                            behavior_dict['scanimage_roi_{}'.format(roikey)] = list()
+                            
                         for trial_start_time,trial_end_time in zip(behavior_dict['trial_start_times'],behavior_dict['trial_end_times']):
                             trial_start_time = trial_start_time +datetime.timedelta(seconds = time_offset-.5) #gets a 0.5 second extra
                             trial_end_time = trial_end_time +datetime.timedelta(seconds = time_offset)
@@ -244,15 +265,16 @@ def export_pybpod_files(overwrite=False,behavior_export_basedir = '/home/rozmar/
                             if any(movie_idxes):
                                 if sum(movie_idxes) == 1:
                                     moviename = np.asarray(filenames_all[istriggered][movie_idxes])
-                                    
                                 else:
                                     moviename = np.asarray(filenames_all[istriggered][movie_idxes])
                                 movie_trial_time_offset = (trigger_arrived_timestamps_all[istriggered][movie_idxes][0]-(trial_start_time- datetime.timedelta(seconds = time_offset-.5))).total_seconds()
                                 trigger_to_frame_offset = (frame_timestamps_all[istriggered][movie_idxes][0]-trigger_arrived_timestamps_all[istriggered][movie_idxes][0]).total_seconds()
+                                roidata = scanimage_integration_roi_data_all[istriggered][movie_idxes][0]
                             else:
                                 moviename = 'no movie for this trial'
                                 movie_trial_time_offset = np.nan
                                 trigger_to_frame_offset  = np.nan
+                                roidata=np.nan
                             bpod_trial_file_names.append(moviename)
                             bpod_scanimage_time_offset.append(movie_trial_time_offset)
                             scanimage_frame_time_offset.append(trigger_to_frame_offset)
@@ -260,6 +282,11 @@ def export_pybpod_files(overwrite=False,behavior_export_basedir = '/home/rozmar/
                                 idx = residual_filenames !=moviename_now
                                 residual_filenames = residual_filenames[idx]
                                 residual_timestamps = residual_timestamps[idx]
+                            for roikey in integration_roi_data.keys():
+                                try:
+                                    behavior_dict['scanimage_roi_{}'.format(roikey)].append(roidata[roikey])
+                                except:
+                                    behavior_dict['scanimage_roi_{}'.format(roikey)].append([])
                             #
                             #%
                         behavior_dict['scanimage_file_names'] = bpod_trial_file_names
