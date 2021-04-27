@@ -32,16 +32,17 @@ target_movie_directory_base = '/groups/svoboda/home/rozsam/Data/BCI_data/'
 # session = '121420'
 # =============================================================================
 
+setup = 'DOM3-MMIMS'
+subject = 'BCI_07'
+session = '2021-02-17'
+
+
 # =============================================================================
-# setup = 'DOM3-MMIMS'
+# setup = 'KayvonScope'
 # subject = 'BCI_08'
-# session = '2021-02-13'
+# session = '012121'
 # =============================================================================
 
-
-setup = 'KayvonScope'
-subject = 'BCI_03'
-session = '121420'
 
 # =============================================================================
 # setup = 'KayvonScope'

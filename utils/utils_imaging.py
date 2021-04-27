@@ -326,12 +326,16 @@ def find_ROIs(full_movie_dir):
         if key.endswith('_list') and 'Img' in key:
             ops[key[:-5]]=ops[key]
             #print(key)
+        elif key =='fs_list':
+            ops[key[:-5]]=np.median(ops[key])
+            print('there were multiple frame rates: {} , using: {}'.format(np.unique(ops[key]),np.median(ops[key])))
         elif key.endswith('_list'):
             ops[key[:-5]]=ops[key]
         if key.endswith('_list'):
             ops.pop(key, None)
             
             #%
+    #ops['tau'] = .25
     ops['do_registration'] = 0
     ops['save_path'] = full_movie_dir
     ops['allow_overlap'] = False
