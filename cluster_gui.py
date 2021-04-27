@@ -1,16 +1,21 @@
 from PyQt5.QtWidgets import QTableWidget,QTableWidgetItem,QApplication, QWidget, QPushButton,  QLineEdit, QCheckBox, QHBoxLayout, QGroupBox, QDialog, QVBoxLayout, QGridLayout, QComboBox, QSizePolicy, qApp, QLabel,QPlainTextEdit
 from PyQt5.QtCore import pyqtSlot, QTimer, Qt
+from PyQt5 import QtGui
 import os
 import numpy as np
 import sys
-
+import json
+from utils import utils_io
+from pathlib import Path
+import time
+import threading
 class App(QDialog):
     def __init__(self):
         super().__init__()
         print('started')
-        self.dirs = dict()
+        self.target_movie_directory_base = '/groups/svoboda/home/rozsam/Data/BCI_data/'
         self.handles = dict()
-        self.title = 'BCI imaging pipeline control - jClust'
+        self.title = 'BCI imaging pipeline control - jrClust'
         self.left = 20 # 10
         self.top = 30 # 10
         self.width = 1400 # 1024
@@ -18,7 +23,7 @@ class App(QDialog):
         #self.microstep_size = 0.09525 # microns per step
         
         self.base_directory = ''
-        self.setups = ['DOM3_MMIMS',
+        self.setups = ['DOM3-MMIMS',
                        'KayvonScope']
         self.subjects = ['BCI_03',
                          'BCI_04',
@@ -27,18 +32,21 @@ class App(QDialog):
                          'BCI_07',
                          'BCI_08',
                          'BCI_09']
+        self.s2p_params = {'max_reg_shift':50, # microns
+                              'max_reg_shift_NR': 20, # microns
+                              'block_size': 200, # microns
+                              'smooth_sigma':0.5, # microns
+                              'smooth_sigma_time':0, #seconds,
+                              'overwrite': False,
+                              'num_workers':4} # folder where the suite2p output is saved
         
         self.initUI()
         
-# =============================================================================
-#         self.timer  = QTimer(self)
-#         self.timer.setInterval(1000)          # Throw event timeout with an interval of 1000 milliseconds
-#         self.timer.timeout.connect(self.updatelocation) # each time timer counts a second, call self.blink
-#         
-#         self.timer_bpod  = QTimer(self)
-#         self.timer_bpod.setInterval(5000)          # Throw event timeout with an interval of 1000 milliseconds
-#         self.timer_bpod.timeout.connect(self.updatebpodplot) # each time timer counts a second, call self.blink
-# =============================================================================
+        self.timer  = QTimer(self)
+        self.timer.setInterval(5000)          # Throw event timeout with an interval of 1000 milliseconds
+        self.timer.timeout.connect(self.autoupdateprogress) # each time timer counts a second, call self.blink
+        self.timer.start()
+        
     def initUI(self):
         self.setWindowTitle(self.title)
         self.setGeometry(self.left, self.top, self.width, self.height)
@@ -70,11 +78,11 @@ class App(QDialog):
         layout.addWidget(QLabel('Subject'),0,2)
         layout.addWidget(self.handles['subject_select'],1, 2)
         
-        self.handles['session_select'] = QLineEdit(self)
-        self.handles['session_select'].setText('session comes here')
-        self.handles['session_select'].returnPressed.connect(lambda: self.update_exp_details())#self.update_arduino_vals()) 
+        self.handles['session'] = QLineEdit(self)
+        self.handles['session'].setText('2021-02-13')
+        self.handles['session'].returnPressed.connect(lambda: self.update_exp_details())#self.update_arduino_vals()) 
         layout.addWidget(QLabel('Session'),0,3)
-        layout.addWidget(self.handles['session_select'],1, 3)
+        layout.addWidget(self.handles['session'],1, 3)
         
         self.handles['refimage_start'] = QPushButton('Generate reference image')
         self.handles['refimage_start'].setFocusPolicy(Qt.NoFocus)
@@ -139,22 +147,196 @@ class App(QDialog):
         layout = QGridLayout()
         self.handles['progress_table'] = QTableWidget()
         self.handles['progress_table'].setRowCount(10)
-        self.handles['progress_table'].setColumnCount(5)
+        self.handles['progress_table'].setColumnCount(4)
+        self.handles['progress_table'].setHorizontalHeaderLabels(['Movie name','Registered','Concatenated','Cell detection'])
         layout.addWidget(self.handles['progress_table'],0,0)
         self.horizontalGroupBox_progress.setLayout(layout)
         
+    def update_session_list(self):
+        print('looking for existing sessions on cluster')
+        
+    @pyqtSlot()
+    def autoupdateprogress(self):
+        try:
+            concatenated_movie_filelist_json = os.path.join(self.target_movie_directory,'_concatenated_movie','filelist.json')
+            with open(concatenated_movie_filelist_json, "r") as read_file:
+                filelist_dict = json.load(read_file)
+            if filelist_dict['concatenation_underway']:
+                concatenationcolor = 'red'
+            else:
+                concatenationcolor = 'green'
+        except:
+            concatenationcolor = 'green'
+        self.handles['concatenate_start'].setStyleSheet("background-color : {}".format(concatenationcolor))
+        
+        if self.handles['concatenate_auto'].isChecked() and concatenationcolor == 'green':
+            self.concatenate_movies()
+            
+        if self.handles['motioncorr_auto'].isChecked():
+            self.do_motion_correction()
+        try:
+            self.update_progress_table()
+        except:
+            print('could not plot')
+    def update_progress_table(self):
+        file_dict = np.load(os.path.join(self.target_movie_directory,'copy_data.npy'),allow_pickle = True).tolist()
+        concatenated_movie_filelist_json = os.path.join(self.target_movie_directory,'_concatenated_movie','filelist.json')
+        try:
+            with open(concatenated_movie_filelist_json, "r") as read_file:
+                concatenated_filelist_dict = json.load(read_file)
+            concatenation_started = True
+        except:
+            concatenation_started = False
+            
+        self.handles['progress_table'].setRowCount(len(file_dict['copied_files']))
+        for i,file in enumerate(file_dict['copied_files'][::-1]):
+            self.handles['progress_table'].setItem(i,0, QTableWidgetItem(file))
+            if not concatenation_started:
+                self.handles['progress_table'].setItem(i,2, QTableWidgetItem('Nope'))
+                self.handles['progress_table'].item(i,2).setBackground(QtGui.QColor('red'))
+            else:
+                if file in concatenated_filelist_dict['file_name_list']:
+                    self.handles['progress_table'].setItem(i,2, QTableWidgetItem('Done'))
+                    self.handles['progress_table'].item(i,2).setBackground(QtGui.QColor('green'))
+                else:
+                    self.handles['progress_table'].setItem(i,2, QTableWidgetItem('Nope'))
+                    self.handles['progress_table'].item(i,2).setBackground(QtGui.QColor('red'))
+                    
+            dir_now = os.path.join(self.target_movie_directory,file[:-4])
+            tiff_now = os.path.join(self.target_movie_directory,file[:-4],file)
+            reg_json_file = os.path.join(self.target_movie_directory,file[:-4],'reg_progress.json')
+            if 'reg_progress.json' in os.listdir(dir_now):
+                with open(reg_json_file, "r") as read_file:
+                    reg_dict = json.load(read_file)
+                    registration_started = reg_dict['registration_started']
+            else:
+                registration_started = False
+            if registration_started:
+                if 'registration_finished' in reg_dict.keys():
+                    if reg_dict['registration_finished']:
+                        registration_finished = True
+                    else:
+                        registration_finished = False
+                        
+                else:
+                    registration_finished = False
+                self.handles['progress_table'].setItem(i,0, QTableWidgetItem(file))
+            if registration_finished:
+                regtime = int(float(reg_dict['registration_finished_time'])-float(reg_dict['registration_started_time']))
+                self.handles['progress_table'].setItem(i,1, QTableWidgetItem('Done in {} s'.format(regtime)))
+                self.handles['progress_table'].item(i,1).setBackground(QtGui.QColor('green'))
+            elif registration_started:
+                starttime = time.strftime('%H:%M:%S', time.gmtime(float(reg_dict['registration_started_time'])))
+                self.handles['progress_table'].setItem(i,1, QTableWidgetItem('Started at {}'.format(starttime)))
+                self.handles['progress_table'].item(i,1).setBackground(QtGui.QColor('white'))
+            else:
+                self.handles['progress_table'].setItem(i,1, QTableWidgetItem('Not started'))
+                self.handles['progress_table'].item(i,1).setBackground(QtGui.QColor('red'))
+
     def update_exp_details(self):
-        print('change the json file and start updating')
+        setup = self.handles['setup_select'].currentText()
+        subject = self.handles['subject_select'].currentText()
+        session = self.handles['session'].text()
+        self.target_movie_directory = os.path.join(self.target_movie_directory_base,setup,subject,session)
+        sp2_params_file = os.path.join(self.target_movie_directory,'s2p_params.json')
+        Path(self.target_movie_directory).mkdir(parents = True,exist_ok = True)
+        with open(sp2_params_file, "w") as data_file:
+                json.dump(self.s2p_params, data_file, indent=2)
+        #% Check for new .tiff files in a given directory and copy them when they are finished - should be run every few seconds
+        copyfile_json_file = os.path.join(self.target_movie_directory_base,'copyfile.json')
+        copyfile_params = {'setup':setup,
+                           'subject':subject,
+                           'session':session}
+        with open(copyfile_json_file, "w") as data_file:
+                json.dump(copyfile_params, data_file, indent=2)
+        
+        self.update_progress_table()
+        
+        
+        
     def generate_reference_image(self):
+        trial_num_to_use = int(self.handles['refimage_movienum'].currentText())
+        #%
+        if not os.path.exists(os.path.join(self.target_movie_directory,'mean_image.npy')):
+            cluster_command_list = ['eval "$(conda shell.bash hook)"',
+                                    'conda activate suite2p',
+                                    'cd ~/Scripts/Python/BCI_pipeline/',
+                                    'python cluster_helper.py {} "\'{}\'" {}'.format('utils_imaging.generate_mean_image_from_trials',self.target_movie_directory,trial_num_to_use)]
+            with open("/groups/svoboda/home/rozsam/Scripts/runBCI.sh","w") as shfile:
+                #shfile.writelines(cluster_command_list) 
+                for L in cluster_command_list:
+                    shfile.writelines(L+'\n') 
+            bash_command = "bsub -n 1 -J BCI_job 'sh /groups/svoboda/home/rozsam/Scripts/runBCI.sh > ~/Scripts/BCI_output.txt'"
+            os.system(bash_command)
+        else:
+            print('reference image is already present')
         print('reference image is being generated')
     def do_motion_correction(self):
+        file_dict = np.load(os.path.join(self.target_movie_directory,'copy_data.npy'),allow_pickle = True).tolist()
+        
+        for file in file_dict['copied_files']:
+            if not os.path.exists(os.path.join(self.target_movie_directory,'mean_image.npy')):
+                print('no reference image!!')
+                break
+            
+            dir_now = os.path.join(self.target_movie_directory,file[:-4])
+            #tiff_now = os.path.join(self.target_movie_directory,file[:-4],file)
+            reg_json_file = os.path.join(self.target_movie_directory,file[:-4],'reg_progress.json')
+            if 'reg_progress.json' in os.listdir(dir_now):
+                with open(reg_json_file, "r") as read_file:
+                    reg_dict = json.load(read_file)
+            else:
+                reg_dict = {'registration_started':False}
+                
+            if reg_dict['registration_started']:
+                continue
+            print('starting {}'.format(file))
+            #%
+            cluster_command_list = ['eval "$(conda shell.bash hook)"',
+                                    'conda activate suite2p',
+                                    'cd ~/Scripts/Python/BCI_pipeline/',
+                                    "python cluster_helper.py {} '\"{}\"' '\"{}\"'".format('utils_imaging.register_trial',self.target_movie_directory,file)]
+            cluster_output_file = os.path.join(dir_now,'s2p_registration_output.txt')
+            bash_command = r"bsub -n 1 -J BCI_register_{} -o /dev/null '{} > {}'".format(file,' && '.join(cluster_command_list),cluster_output_file)
+            os.system(bash_command)
+            
         print('doing motion correction')
     def concatenate_movies(self):
+        concatenated_movie_dir = os.path.join(self.target_movie_directory,'_concatenated_movie')
+        try:
+            concatenated_movie_filelist_json = os.path.join(self.target_movie_directory,'_concatenated_movie','filelist.json')
+            with open(concatenated_movie_filelist_json, "r") as read_file:
+                filelist_dict = json.load(read_file)
+            if filelist_dict['concatenation_underway']:
+                print('concatenation is already running, aborting')
+                return None
+        except:
+            pass # concatenation json file is not present
+        Path(concatenated_movie_dir).mkdir(parents = True,exist_ok = True)
+        #utils_io.concatenate_suite2p_files(target_movie_directory)
+        cluster_command_list = ['eval "$(conda shell.bash hook)"',
+                                'conda activate suite2p',
+                                'cd ~/Scripts/Python/BCI_pipeline/',
+                                "python cluster_helper.py {} '\"{}\"'".format('utils_io.concatenate_suite2p_files',self.target_movie_directory)]
+        cluster_output_file = os.path.join(os.path.join(self.target_movie_directory,'_concatenated_movie'),'s2p_concatenation_output.txt')
+        bash_command = r"bsub -n 1 -J BCI_concatenate_files '{} > {}'".format(' && '.join(cluster_command_list),cluster_output_file)
+        os.system(bash_command)
+        
+        
         print('concatenating')
     def detect_cells(self):
+        core_num_to_use = int(self.handles['celldetect_corenum'].currentText())
+        concatenated_movie_dir = os.path.join(self.target_movie_directory,'_concatenated_movie')
+        full_movie_dir = concatenated_movie_dir
+        #%
+        cluster_command_list = ['eval "$(conda shell.bash hook)"',
+                                'conda activate suite2p',
+                                'cd ~/Scripts/Python/BCI_pipeline/',
+                                "python cluster_helper.py {} '\"{}\"'".format('utils_imaging.find_ROIs',full_movie_dir)]
+        cluster_output_file = os.path.join(full_movie_dir,'s2p_ROI_finding_output.txt')
+        bash_command = r"bsub -n {} -J BCI_ROIfind '{} > {}'".format(core_num_to_use,' && '.join(cluster_command_list),cluster_output_file)
+        os.system(bash_command) # -o /dev/null
         print('detecting cells')
-    
-        
     def start_s2p(self):
         print('starting s2p')
         
