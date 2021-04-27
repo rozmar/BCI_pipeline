@@ -91,11 +91,18 @@ def plot_behavior_session(session_key_wr = {'wr_id':'BCI07', 'session':2},moving
     
     gocue_trial, go_cue = (experiment.TrialEvent()&session_key&'trial_event_type = "go"').fetch('trial','trial_event_time')
     thresholdcross_trial, threshold_cross = (experiment.TrialEvent()&session_key&'trial_event_type = "threshold cross"').fetch('trial','trial_event_time')
+    reward_trial, reward_time = (experiment.TrialEvent()&session_key&'trial_event_type = "reward"').fetch('trial','trial_event_time')
     time_to_hit = np.zeros(len(gocue_trial))*np.nan
     for trial,threshold_t in zip(thresholdcross_trial,threshold_cross):
         idx = gocue_trial==trial
         time_to_hit[idx] = threshold_t-go_cue[idx]
     
+    time_to_collect_reward = np.zeros(len(gocue_trial))*np.nan
+    for trial,reward_t in zip(reward_trial,reward_time):
+        idx_th = thresholdcross_trial==trial
+        idx = gocue_trial==trial
+        time_to_collect_reward[idx] = reward_t-threshold_cross[idx_th]
+        
     trial_num,outcome,lickport_auto_step_freq,task_protocol,lickport_step_size,trial_start_time,trial_end_time,lickport_maximum_speed,lickport_limit_far = (experiment.SessionTrial()*experiment.LickPortSetting()*experiment.BehaviorTrial()&session_key).fetch('trial','outcome','lickport_auto_step_freq','task_protocol','lickport_step_size','trial_start_time','trial_end_time','lickport_maximum_speed','lickport_limit_far')
     lickport_step_size = np.asarray(lickport_step_size,float)
     trial_lengths = np.asarray(trial_end_time-trial_start_time,float)
@@ -116,6 +123,7 @@ def plot_behavior_session(session_key_wr = {'wr_id':'BCI07', 'session':2},moving
     rewardsperminute = np.zeros(len(outcome))*np.nan
     trial_length_moving = np.zeros(len(outcome))*np.nan
     timetohit_moving = np.zeros(len(outcome))*np.nan
+    timetocollectreward_moving = np.zeros(len(outcome))*np.nan
     max_speed_moving = np.zeros(len(outcome))*np.nan
     trial_average_speed_moving = np.zeros(len(outcome))*np.nan
     task_change_idx = np.where(np.abs(np.diff(task_protocol))>0)[0]
@@ -125,6 +133,7 @@ def plot_behavior_session(session_key_wr = {'wr_id':'BCI07', 'session':2},moving
         rewardsperminute[task_change_idx[idx]:task_change_idx[idx+1]] = utils_plot.rollingfun((hits/trial_lengths*60)[task_change_idx[idx]:task_change_idx[idx+1]],moving_window)
         trial_length_moving[task_change_idx[idx]:task_change_idx[idx+1]] = utils_plot.rollingfun(trial_lengths[task_change_idx[idx]:task_change_idx[idx+1]],moving_window)
         timetohit_moving[task_change_idx[idx]:task_change_idx[idx+1]] = utils_plot.rollingfun(time_to_hit[task_change_idx[idx]:task_change_idx[idx+1]],moving_window)
+        timetocollectreward_moving[task_change_idx[idx]:task_change_idx[idx+1]] = utils_plot.rollingfun(time_to_collect_reward[task_change_idx[idx]:task_change_idx[idx+1]],moving_window)
         trial_average_speed_moving[task_change_idx[idx]:task_change_idx[idx+1]] = utils_plot.rollingfun(trial_average_speed[task_change_idx[idx]:task_change_idx[idx+1]],moving_window)
         max_speed_moving[task_change_idx[idx]:task_change_idx[idx+1]] = utils_plot.rollingfun(trial_max_speed[task_change_idx[idx]:task_change_idx[idx+1]],moving_window)
     
@@ -148,6 +157,7 @@ def plot_behavior_session(session_key_wr = {'wr_id':'BCI07', 'session':2},moving
     ax_rewardsperminute.yaxis.label.set_color('green')
     
     ax_timing = fig_behavior.add_subplot(413,sharex = ax_movement_speed)
+    ax_time_to_lick = ax_timing.twinx()
     
     ax_valve = fig_behavior.add_subplot(414,sharex = ax_movement_speed)
     ax_threshold = ax_valve.twinx()
@@ -156,6 +166,9 @@ def plot_behavior_session(session_key_wr = {'wr_id':'BCI07', 'session':2},moving
     ax_timing.semilogy(trial_num,trial_length_moving,'r-')
     ax_timing.semilogy(trial_num,time_to_hit,'g.')
     ax_timing.semilogy(trial_num,timetohit_moving,'g-')
+    ax_time_to_lick.plot(trial_num,time_to_collect_reward,'b^')
+    ax_time_to_lick.plot(trial_num,timetocollectreward_moving,'b-')
+    
     
     
     ax_threshold.plot(trial_num_bci,threshold_low,'r-.')
@@ -186,7 +199,7 @@ def plot_behavior_session(session_key_wr = {'wr_id':'BCI07', 'session':2},moving
     
     ax_timing.set_ylabel('Length of trial and time to hit (s)')
     ax_rewardrate.set_title('{} - {} (session {}) - {}'.format(session_key_wr['wr_id'],session_date,session_key_wr['session'],session_user))
-
+    ax_time_to_lick.set_ylabel('Time to lick from threshold crossing (s)')
 
 def plot_motor_precision():
     csvfile = '/home/rozmar/Data/Behavior/Behavior_rigs/DOM3-MMIMS/BCI/experiments/BCI/setups/DOM3/sessions/20210323-092017/20210323-092017.csv'

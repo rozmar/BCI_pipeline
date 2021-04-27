@@ -1,4 +1,4 @@
-from utils import utils_pybpod, utils_imaging, utils_ephys
+from utils import utils_pybpod, utils_imaging, utils_ephys, utils_io
 from scipy.io import savemat
 from pathlib import Path
 import os
@@ -43,13 +43,13 @@ def find_pybpod_sessions(subject_names_list,date_now,projects):
 #%% this script will export behavior and pair it to imaging, then save it in a neat directory structure
 def export_pybpod_files(overwrite=False,behavior_export_basedir = '/home/rozmar/Data/Behavior/BCI_exported'):
 #overwrite = False
-#%%
 # =============================================================================
+# #%%
 #     overwrite=True
 #     behavior_export_basedir = '/home/rozmar/Data/Behavior/BCI_exported'
+#     
+#     #%%
 # =============================================================================
-    
-    #%%
     calcium_imaging_raw_basedir = dj.config['locations.imagingdata_raw']
     raw_behavior_dirs =  dj.config['locations.behavior_dirs_raw'] 
     
@@ -75,7 +75,8 @@ def export_pybpod_files(overwrite=False,behavior_export_basedir = '/home/rozmar/
                         except:
                             print('cannot understand date for session dir: {}'.format(session))
                             continue
-                        
+                    
+                    calcium_imaging_raw_session_dir = os.path.join(calcium_imaging_raw_subject_dir,session)
                     bpod_export_dir = os.path.join(behavior_export_basedir,setup,subject)
                     Path(bpod_export_dir).mkdir(parents=True, exist_ok=True)
                     bpod_export_file = '{}-bpod_zaber.npy'.format(session)
@@ -137,8 +138,8 @@ def export_pybpod_files(overwrite=False,behavior_export_basedir = '/home/rozmar/
     #                     timer.sleep(10000)
     # =============================================================================
                     #%
-                    calcium_imaging_raw_session_dir = os.path.join(calcium_imaging_raw_subject_dir,session)
-                    files = extract_files_from_dir(calcium_imaging_raw_session_dir)
+                    
+                    files = utils_io.extract_files_from_dir(calcium_imaging_raw_session_dir)
                     tiffiles = files['exts']=='.tif'
                     uniquebasenames = np.unique(files['basenames'][tiffiles])
                     filenames_all = list()
@@ -146,7 +147,9 @@ def export_pybpod_files(overwrite=False,behavior_export_basedir = '/home/rozmar/
                     nextfile_timestamps_all = list()
                     acqtrigger_timestamps_all = list()
                     trigger_arrived_timestamps_all = list()
+                    scanimage_integration_roi_data_all = list()
                     for basename in uniquebasenames:
+                        #%
                         file_idxs_now = (files['exts']=='.tif') & (files['basenames']==basename)
                         filenames = files['filenames'][file_idxs_now]
                         fileindices = files['fileindices'][file_idxs_now]
@@ -155,11 +158,11 @@ def export_pybpod_files(overwrite=False,behavior_export_basedir = '/home/rozmar/
                         for filename in filenames:
                             try:
                                 metadata = utils_imaging.extract_scanimage_metadata(os.path.join(calcium_imaging_raw_session_dir,filename))
+                                
                             except:
                                 print('tiff file read error: {}'.format(os.path.join(calcium_imaging_raw_session_dir,filename)))
                                 continue
-                                
-                            #%
+                           
                             movie_start_time = metadata['movie_start_time']
                             
                             if float(metadata['description_first_frame']['frameTimestamps_sec'])<0:
@@ -194,6 +197,20 @@ def export_pybpod_files(overwrite=False,behavior_export_basedir = '/home/rozmar/
                                 print('not triggered')
                             else:
                                 trigger_arrived_timestamps_all.append(trigger_arrived_timestamp)
+                            try:
+                                integration_roi_data = {}
+                                integration_roi_data['outputChannelsEnabled'] = np.asarray(metadata['metadata']['hIntegrationRoiManager']['outputChannelsEnabled'].strip('[]').split(' '))=='true'
+                                integration_roi_data['outputChannelsNames'] = metadata['metadata']['hIntegrationRoiManager']['outputChannelsNames'].strip("{}").replace("'","").split(' ')
+                                integration_roi_data['outputChannelsRoiNames'] = eval(metadata['metadata']['hIntegrationRoiManager']['outputChannelsRoiNames'].replace('{','[').replace('}',']').replace(' ',','))
+                                integration_roi_data['outputChannelsFunctions'] = eval(metadata['metadata']['hIntegrationRoiManager']['outputChannelsFunctions'].replace('{','[').replace('}',']').replace(' ',','))
+                            except:
+                                integration_roi_data = {}
+                                integration_roi_data['outputChannelsEnabled'] = []
+                                integration_roi_data['outputChannelsNames'] = []
+                                integration_roi_data['outputChannelsRoiNames'] = []
+                                integration_roi_data['outputChannelsFunctions'] = []
+                                print('no ROI data')
+                            scanimage_integration_roi_data_all.append(integration_roi_data)
                                 #print('triggered')
                             
                     #%
@@ -202,6 +219,8 @@ def export_pybpod_files(overwrite=False,behavior_export_basedir = '/home/rozmar/
                     nextfile_timestamps_all= np.asarray(nextfile_timestamps_all)
                     acqtrigger_timestamps_all= np.asarray(acqtrigger_timestamps_all)
                     trigger_arrived_timestamps_all = np.asarray(trigger_arrived_timestamps_all)
+                    scanimage_integration_roi_data_all = np.asarray(scanimage_integration_roi_data_all)
+                    
                     file_order = np.argsort(frame_timestamps_all)
                     
                     filenames_all = filenames_all[file_order]
@@ -209,6 +228,7 @@ def export_pybpod_files(overwrite=False,behavior_export_basedir = '/home/rozmar/
                     nextfile_timestamps_all = nextfile_timestamps_all[file_order]
                     acqtrigger_timestamps_all = acqtrigger_timestamps_all[file_order]
                     trigger_arrived_timestamps_all = trigger_arrived_timestamps_all[file_order]
+                    scanimage_integration_roi_data_all = scanimage_integration_roi_data_all[file_order]
                     
                     istriggered = list()
                     for stamp in trigger_arrived_timestamps_all: istriggered.append(type(stamp)==datetime.datetime)
@@ -234,6 +254,10 @@ def export_pybpod_files(overwrite=False,behavior_export_basedir = '/home/rozmar/
                         #%
                         bpod_trial_file_names = list()
                         bpod_scanimage_time_offset = list()
+                        scanimage_frame_time_offset = list()
+                        for roikey in integration_roi_data.keys():
+                            behavior_dict['scanimage_roi_{}'.format(roikey)] = list()
+                            
                         for trial_start_time,trial_end_time in zip(behavior_dict['trial_start_times'],behavior_dict['trial_end_times']):
                             trial_start_time = trial_start_time +datetime.timedelta(seconds = time_offset-.5) #gets a 0.5 second extra
                             trial_end_time = trial_end_time +datetime.timedelta(seconds = time_offset)
@@ -244,18 +268,30 @@ def export_pybpod_files(overwrite=False,behavior_export_basedir = '/home/rozmar/
                                 else:
                                     moviename = np.asarray(filenames_all[istriggered][movie_idxes])
                                 movie_trial_time_offset = (trigger_arrived_timestamps_all[istriggered][movie_idxes][0]-(trial_start_time- datetime.timedelta(seconds = time_offset-.5))).total_seconds()
+                                trigger_to_frame_offset = (frame_timestamps_all[istriggered][movie_idxes][0]-trigger_arrived_timestamps_all[istriggered][movie_idxes][0]).total_seconds()
+                                roidata = scanimage_integration_roi_data_all[istriggered][movie_idxes][0]
                             else:
                                 moviename = 'no movie for this trial'
                                 movie_trial_time_offset = np.nan
+                                trigger_to_frame_offset  = np.nan
+                                roidata=np.nan
                             bpod_trial_file_names.append(moviename)
                             bpod_scanimage_time_offset.append(movie_trial_time_offset)
+                            scanimage_frame_time_offset.append(trigger_to_frame_offset)
                             for moviename_now in moviename:
                                 idx = residual_filenames !=moviename_now
                                 residual_filenames = residual_filenames[idx]
                                 residual_timestamps = residual_timestamps[idx]
+                            for roikey in integration_roi_data.keys():
+                                try:
+                                    behavior_dict['scanimage_roi_{}'.format(roikey)].append(roidata[roikey])
+                                except:
+                                    behavior_dict['scanimage_roi_{}'.format(roikey)].append([])
+                            #
                             #%
                         behavior_dict['scanimage_file_names'] = bpod_trial_file_names
                         behavior_dict['scanimage_bpod_time_offset'] = np.asarray(bpod_scanimage_time_offset)
+                        behavior_dict['scanimage_first_frame_offset'] = np.asarray(scanimage_frame_time_offset)
                     else:
                         print('no movie-behavior correspondance found for {}'.format(session))
                         behavior_dict['scanimage_file_names'] = 'no movie files found'
