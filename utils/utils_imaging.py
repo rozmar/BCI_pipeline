@@ -235,6 +235,7 @@ def generate_mean_image_from_trials(target_movie_directory,trial_num_to_use):
     #%
     with open(os.path.join(target_movie_directory,'s2p_params.json'), "r") as read_file:
         s2p_params = json.load(read_file)
+    reference_movie_dir = os.path.join(target_movie_directory,'_reference_image')
     file_dict = np.load(os.path.join(target_movie_directory,'copy_data.npy'),allow_pickle = True).tolist()
     file_now = file_dict['copied_files'][0]
     metadata = extract_scanimage_metadata(os.path.join(target_movie_directory,file_now[:-4],file_now))
@@ -270,24 +271,26 @@ def generate_mean_image_from_trials(target_movie_directory,trial_num_to_use):
     ops['block_size'] = np.ones(2,int)*block_size
     ops['smooth_sigma'] = s2p_params['smooth_sigma']/np.min(pixelsize_real)#pixelsize_real #ops['diameter']/10 #
     #ops['smooth_sigma_time'] = s2p_params['smooth_sigma_time']*float(metadata['frame_rate']) # ops['tau']*ops['fs']#
-    ops['data_path'] = target_movie_directory
+    ops['data_path'] = reference_movie_dir
     ops['batch_size'] = 250
     ops['do_registration'] = 0
     ops['roidetect'] = False
     ops['do_bidiphase'] = True
     #%
     tiff_list = list()
+    filename_list = list()
     for file_now in file_dict['copied_files']:
         tiff_list.append(os.path.join(target_movie_directory,file_now[:-4],file_now))
+        filename_list.append(file_now)
         if len(tiff_list)>=trial_num_to_use:
             break
     ops['tiff_list'] = tiff_list
-    ops['save_path0'] = target_movie_directory
+    ops['save_path0'] = reference_movie_dir
     #%
     run_s2p(ops)
     refImg = None
     raw = True
-    ops = np.load(os.path.join(target_movie_directory,'suite2p/plane0/ops.npy'),allow_pickle = True).tolist()
+    ops = np.load(os.path.join(target_movie_directory,'_reference_image','suite2p/plane0/ops.npy'),allow_pickle = True).tolist()
     if ops['frames_include'] != -1:
         ops['nframes'] = min((ops['nframes'], ops['frames_include']))
     else:
@@ -312,9 +315,17 @@ def generate_mean_image_from_trials(target_movie_directory,trial_num_to_use):
         refImg = registration.register.compute_reference(ops, frames)
         print('Reference frame, %0.2f sec.'%(time.time()-t0))
     ops['refImg'] = refImg
-    meanimage_dict = {'refImg':refImg}
-    np.save(os.path.join(target_movie_directory,'mean_image.npy'),meanimage_dict)        
+    meanimage_dict = {'refImg':refImg,
+                      'movies_used':filename_list}
+    np.save(os.path.join(target_movie_directory,'mean_image.npy'),meanimage_dict)    
     
+    reference_movie_json = os.path.join(target_movie_directory,'_reference_image','refimage_progress.json')
+    with open(reference_movie_json, "r") as read_file:
+        refimage_dict = json.load(read_file)
+    refimage_dict['ref_image_finished'] = True
+    refimage_dict['ref_image_finished_time'] = str(time.time())
+    with open(reference_movie_json, "w") as data_file:
+        json.dump(refimage_dict, data_file, indent=2)
     
 def find_ROIs(full_movie_dir):
     #%%
@@ -334,7 +345,21 @@ def find_ROIs(full_movie_dir):
             ops[key[:-5]]=ops[key]
         if key.endswith('_list'):
             ops.pop(key, None)
+    
+    concatenated_movie_filelist_json = os.path.join(full_movie_dir,'filelist.json')
+    with open(concatenated_movie_filelist_json, "r") as read_file:
+        filelist_dict = json.load(read_file)
             
+    roifind_progress_dict = {'roifind_started':True,
+                             'roifind_finished':False,
+                             'roifind_start_time':str(time.time()),
+                             'roifind_source_movies':list(filelist_dict['file_name_list'])}
+    #print(roifind_progress_dict)
+    roifindjson_file = os.path.join(full_movie_dir,'roifind_progress.json')
+    with open(roifindjson_file, "w") as write_file:
+        json.dump(roifind_progress_dict, write_file,indent=2)
+    
+    
             #%
     #ops['tau'] = .25
     ops['do_registration'] = 0
@@ -352,6 +377,10 @@ def find_ROIs(full_movie_dir):
     ops['save_mat']=1
     #%% #np.save(os.path.join(full_movie_dir,'ops.npy'),ops)
     run_plane(ops)
+    roifind_progress_dict['roifind_finished'] = True
+    roifind_progress_dict['roifind_finish_time']=str(time.time())
+    with open(roifindjson_file, "w") as write_file:
+        json.dump(roifind_progress_dict, write_file,indent=2)
     #%%
 def registration_metrics(full_movie_dir):
     #%%
@@ -366,8 +395,10 @@ def registration_metrics(full_movie_dir):
             #print(key)
         elif key.endswith('_list'):
             ops[key[:-5]]=ops[key]
-        if key.endswith('_list'):
-            ops.pop(key, None)
+# =============================================================================
+#         if key.endswith('_list'):
+#             ops.pop(key, None)
+# =============================================================================
             #%
     ops['do_registration'] = 0
     ops['save_path'] = full_movie_dir

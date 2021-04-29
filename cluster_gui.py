@@ -9,13 +9,28 @@ from utils import utils_io
 from pathlib import Path
 import time
 import threading
+
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg, NavigationToolbar2QT as NavigationToolbar
+from matplotlib.figure import Figure
+
+
+class MplCanvas(FigureCanvasQTAgg):
+    def __init__(self, parent=None, width=5, height=4, dpi=100,shareaxis = None):
+        fig = Figure(figsize=(width, height), dpi=dpi)
+        if  not shareaxis:
+            self.axes = fig.add_subplot(111)
+        else:
+            self.axes = fig.add_subplot(111,sharex = shareaxis, sharey = shareaxis)
+        super(MplCanvas, self).__init__(fig)
+
+
 class App(QDialog):
     def __init__(self):
         super().__init__()
         print('started')
         self.target_movie_directory_base = '/groups/svoboda/home/rozsam/Data/BCI_data/'
         self.handles = dict()
-        self.title = 'BCI imaging pipeline control - jrClust'
+        self.title = 'BCI imaging pipeline control - JaneliaCluser'
         self.left = 20 # 10
         self.top = 30 # 10
         self.width = 1400 # 1024
@@ -43,10 +58,10 @@ class App(QDialog):
         self.initUI()
         
         self.timer  = QTimer(self)
-        self.timer.setInterval(5000)          # Throw event timeout with an interval of 1000 milliseconds
+        self.timer.setInterval(10000)          # Throw event timeout with an interval of 1000 milliseconds
         self.timer.timeout.connect(self.autoupdateprogress) # each time timer counts a second, call self.blink
         self.timer.start()
-        
+        self.plotinprogress = False
     def initUI(self):
         self.setWindowTitle(self.title)
         self.setGeometry(self.left, self.top, self.width, self.height)
@@ -67,80 +82,91 @@ class App(QDialog):
         self.handles['setup_select'] = QComboBox(self)
         self.handles['setup_select'].setFocusPolicy(Qt.NoFocus)
         self.handles['setup_select'].addItems(self.setups)
-        #self.handles['setup_select'].currentIndexChanged.connect(lambda: self.update_exp_details())  
+        self.handles['setup_select'].currentIndexChanged.connect(lambda: self.find_available_sessions())  
         layout.addWidget(QLabel('Setup'),0,0)
         layout.addWidget(self.handles['setup_select'],1, 0)
         
         self.handles['subject_select'] = QComboBox(self)
         self.handles['subject_select'].setFocusPolicy(Qt.NoFocus)
         self.handles['subject_select'].addItems(self.subjects)
-        #self.handles['subject_select'].currentIndexChanged.connect(lambda: self.update_exp_details())  
+        self.handles['subject_select'].currentIndexChanged.connect(lambda: self.find_available_sessions())  
         layout.addWidget(QLabel('Subject'),0,2)
         layout.addWidget(self.handles['subject_select'],1, 2)
+        
+        self.handles['session_select'] = QComboBox(self)
+        self.handles['session_select'].setFocusPolicy(Qt.NoFocus)
+        #self.handles['session_select'].addItems(self.subjects)
+        self.handles['session_select'].currentIndexChanged.connect(lambda: self.update_session())  
+        layout.addWidget(self.handles['session_select'],1, 3,1,2)
         
         self.handles['session'] = QLineEdit(self)
         self.handles['session'].setText('2021-02-13')
         self.handles['session'].returnPressed.connect(lambda: self.update_exp_details())#self.update_arduino_vals()) 
-        layout.addWidget(QLabel('Session'),0,3)
-        layout.addWidget(self.handles['session'],1, 3)
+        layout.addWidget(QLabel('Session'),0,3,1,2)
+        layout.addWidget(QLabel('Create new / start copy:'),2,3)
+        layout.addWidget(self.handles['session'],2, 4)
         
+        
+        
+        self.handles['active_experiment_text'] = QLabel('Active session:')
+        layout.addWidget(self.handles['active_experiment_text'],0,5,1,5)
         self.handles['refimage_start'] = QPushButton('Generate reference image')
         self.handles['refimage_start'].setFocusPolicy(Qt.NoFocus)
         self.handles['refimage_start'].clicked.connect(self.generate_reference_image)
-        layout.addWidget(self.handles['refimage_start'],0,4,1,2)
-        layout.addWidget(QLabel('Movie#:'),1,4)
+        layout.addWidget(self.handles['refimage_start'],1,5,1,2)
+        layout.addWidget(QLabel('Movie#:'),2,5)
         self.handles['refimage_movienum'] = QComboBox(self)
         self.handles['refimage_movienum'].setFocusPolicy(Qt.NoFocus)
         self.handles['refimage_movienum'].addItems(np.asarray(np.arange(20)+1,str))
-        layout.addWidget(self.handles['refimage_movienum'],1, 5)
+        layout.addWidget(self.handles['refimage_movienum'],2, 6)
         
         self.handles['motioncorr_start'] = QPushButton('Start motion correction')
         self.handles['motioncorr_start'].setFocusPolicy(Qt.NoFocus)
         self.handles['motioncorr_start'].clicked.connect(self.do_motion_correction)
-        layout.addWidget(self.handles['motioncorr_start'],0,6)
+        layout.addWidget(self.handles['motioncorr_start'],1,7)
         
         self.handles['motioncorr_auto'] = QCheckBox(self)
         self.handles['motioncorr_auto'].setText('auto')
         #self.handles['motioncorr_auto'].stateChanged.connect(self.auto_updatelocation)
-        layout.addWidget(self.handles['motioncorr_auto'],1, 6)
+        layout.addWidget(self.handles['motioncorr_auto'],2, 7)
         
         self.handles['concatenate_start'] = QPushButton('Concatenate movies')
         self.handles['concatenate_start'].setFocusPolicy(Qt.NoFocus)
         self.handles['concatenate_start'].clicked.connect(self.concatenate_movies)
-        layout.addWidget(self.handles['concatenate_start'],0,7)
+        layout.addWidget(self.handles['concatenate_start'],1,8)
         
         self.handles['concatenate_auto'] = QCheckBox(self)
         self.handles['concatenate_auto'].setText('auto')
         #self.handles['motioncorr_auto'].stateChanged.connect(self.auto_updatelocation)
-        layout.addWidget(self.handles['concatenate_auto'],1, 7)
+        layout.addWidget(self.handles['concatenate_auto'],2, 8)
         
         self.handles['celldetect_start'] = QPushButton('Segment ROIs')
         self.handles['celldetect_start'].setFocusPolicy(Qt.NoFocus)
         self.handles['celldetect_start'].clicked.connect(self.detect_cells)
-        layout.addWidget(self.handles['celldetect_start'],0,8,1,2)
+        layout.addWidget(self.handles['celldetect_start'],1,9,1,2)
         
-        layout.addWidget(QLabel('Core#:'),1,8)
+        layout.addWidget(QLabel('Core#:'),2,9)
         self.handles['celldetect_corenum'] = QComboBox(self)
         self.handles['celldetect_corenum'].setFocusPolicy(Qt.NoFocus)
         self.handles['celldetect_corenum'].addItems(np.asarray(np.arange(1,20)+1,str))
-        layout.addWidget(self.handles['celldetect_corenum'],1, 9)
+        layout.addWidget(self.handles['celldetect_corenum'],2, 10)
         
         self.handles['regmetrics_start'] = QPushButton('Registration metrics')
         self.handles['regmetrics_start'].setFocusPolicy(Qt.NoFocus)
-        self.handles['regmetrics_start'].clicked.connect(self.detect_cells)
-        layout.addWidget(self.handles['regmetrics_start'],0,10,1,2)
+        self.handles['regmetrics_start'].clicked.connect(self.registration_metrics)
+        layout.addWidget(self.handles['regmetrics_start'],1,11,1,2)
         
-        layout.addWidget(QLabel('Core#:'),1,10)
+        layout.addWidget(QLabel('Core#:'),2,11)
         self.handles['regmetrics_corenum'] = QComboBox(self)
         self.handles['regmetrics_corenum'].setFocusPolicy(Qt.NoFocus)
         self.handles['regmetrics_corenum'].addItems(np.asarray(np.arange(1,20)+1,str))
-        layout.addWidget(self.handles['regmetrics_corenum'],1, 11)
+        layout.addWidget(self.handles['regmetrics_corenum'],2, 12)
         
         
         self.handles['S2P_start'] = QPushButton('Start suite2p')
         self.handles['S2P_start'].setFocusPolicy(Qt.NoFocus)
         self.handles['S2P_start'].clicked.connect(self.start_s2p)
-        layout.addWidget(self.handles['S2P_start'],0,12)
+        layout.addWidget(self.handles['S2P_start'],1,13)
         self.horizontalGroupBox_exp_details.setLayout(layout)
         
         self.horizontalGroupBox_progress = QGroupBox("Progress")
@@ -149,7 +175,14 @@ class App(QDialog):
         self.handles['progress_table'].setRowCount(10)
         self.handles['progress_table'].setColumnCount(4)
         self.handles['progress_table'].setHorizontalHeaderLabels(['Movie name','Registered','Concatenated','Cell detection'])
-        layout.addWidget(self.handles['progress_table'],0,0)
+        layout.addWidget(self.handles['progress_table'],0,0,50,1)
+        
+        
+        self.handles['meanimage_plot'] = MplCanvas(self, width=5, height=4, dpi=100)
+        #self.handles['meanimage_plot'].axes.plot([0,1,2,3,4], [10,1,20,3,40])
+        self.handles['meanimage_toolbar'] = NavigationToolbar(self.handles['meanimage_plot'], self)
+        layout.addWidget(self.handles['meanimage_toolbar'],0,1)
+        layout.addWidget(self.handles['meanimage_plot'],1,1)
         self.horizontalGroupBox_progress.setLayout(layout)
         
     def update_session_list(self):
@@ -157,18 +190,48 @@ class App(QDialog):
         
     @pyqtSlot()
     def autoupdateprogress(self):
+        if self.plotinprogress:
+            print('not ready')
+            return
+        else:
+            self.plotinprogress = True
+            
+        try:
+            roifindjson_file = os.path.join(self.target_movie_directory,'_concatenated_movie','roifind_progress.json')
+            with open(roifindjson_file, "r") as read_file:
+                roifind_progress_dict = json.load(read_file)
+            if not roifind_progress_dict['roifind_finished']:
+                roifindcolor = 'red'
+            else:
+                roifindcolor = 'green'
+        except:
+            roifindcolor = 'green'
+            
         try:
             concatenated_movie_filelist_json = os.path.join(self.target_movie_directory,'_concatenated_movie','filelist.json')
             with open(concatenated_movie_filelist_json, "r") as read_file:
                 filelist_dict = json.load(read_file)
             if filelist_dict['concatenation_underway']:
                 concatenationcolor = 'red'
+                roifindcolor = 'red'
             else:
                 concatenationcolor = 'green'
         except:
             concatenationcolor = 'green'
-        self.handles['concatenate_start'].setStyleSheet("background-color : {}".format(concatenationcolor))
         
+        
+        
+            
+        self.handles['concatenate_start'].setStyleSheet("background-color : {}".format(concatenationcolor))
+        self.handles['celldetect_start'].setStyleSheet("background-color : {}".format(roifindcolor))
+        
+        try:
+            meanimage_dict = np.load(os.path.join(self.target_movie_directory,'mean_image.npy'),allow_pickle = True).tolist()
+            refImg = meanimage_dict['refImg']
+            self.handles['meanimage_plot'].axes.imshow(refImg)
+        except:
+            self.handles['meanimage_plot'].axes.imshow(np.zeros([10,10]))
+        self.handles['meanimage_plot'].draw()
         if self.handles['concatenate_auto'].isChecked() and concatenationcolor == 'green':
             self.concatenate_movies()
             
@@ -178,15 +241,37 @@ class App(QDialog):
             self.update_progress_table()
         except:
             print('could not plot')
+            self.handles['progress_table'].setRowCount(1)
+            self.handles['progress_table'].setItem(0,0, QTableWidgetItem('no data'))
+            self.handles['progress_table'].setItem(0,1, QTableWidgetItem('no data'))
+            self.handles['progress_table'].setItem(0,2, QTableWidgetItem('no data'))
+            self.handles['progress_table'].setItem(0,3, QTableWidgetItem('no data'))
+            
+        copyfile_json_file = os.path.join(self.target_movie_directory_base,'copyfile.json')
+        with open(copyfile_json_file, "r") as read_file:
+            copyfile_params = json.load(read_file)
+        self.handles['active_experiment_text'].setText('Current Setup: {}, Subject: {}, Session:{}'.format(copyfile_params['setup'],copyfile_params['subject'],copyfile_params['session']))
+        self.plotinprogress = False
+        print('update done {}'.format(time.time()))
+        
+            
     def update_progress_table(self):
         file_dict = np.load(os.path.join(self.target_movie_directory,'copy_data.npy'),allow_pickle = True).tolist()
         concatenated_movie_filelist_json = os.path.join(self.target_movie_directory,'_concatenated_movie','filelist.json')
+        cell_detect_json = os.path.join(self.target_movie_directory,'_concatenated_movie','roifind_progress.json')
         try:
             with open(concatenated_movie_filelist_json, "r") as read_file:
                 concatenated_filelist_dict = json.load(read_file)
             concatenation_started = True
         except:
             concatenation_started = False
+            
+        try:
+            with open(cell_detect_json, "r") as read_file:
+                cell_detect_dict = json.load(read_file)
+            cell_detect_started = True
+        except:
+            cell_detect_started = False            
             
         self.handles['progress_table'].setRowCount(len(file_dict['copied_files']))
         for i,file in enumerate(file_dict['copied_files'][::-1]):
@@ -201,6 +286,24 @@ class App(QDialog):
                 else:
                     self.handles['progress_table'].setItem(i,2, QTableWidgetItem('Nope'))
                     self.handles['progress_table'].item(i,2).setBackground(QtGui.QColor('red'))
+            
+            if not cell_detect_started:
+                self.handles['progress_table'].setItem(i,3, QTableWidgetItem('Nope'))
+                self.handles['progress_table'].item(i,3).setBackground(QtGui.QColor('red'))
+            elif cell_detect_dict['roifind_finished']:
+                if file in cell_detect_dict['roifind_source_movies']:
+                    self.handles['progress_table'].setItem(i,3, QTableWidgetItem('Done - included'))
+                    self.handles['progress_table'].item(i,3).setBackground(QtGui.QColor('green'))
+                else:
+                    self.handles['progress_table'].setItem(i,3, QTableWidgetItem('Done-not included'))
+                    self.handles['progress_table'].item(i,3).setBackground(QtGui.QColor('white'))
+            elif not cell_detect_dict['roifind_finished']:
+                if file in cell_detect_dict['roifind_source_movies']:
+                    self.handles['progress_table'].setItem(i,3, QTableWidgetItem('In progress - included'))
+                    self.handles['progress_table'].item(i,3).setBackground(QtGui.QColor('yellow'))
+                else:
+                    self.handles['progress_table'].setItem(i,3, QTableWidgetItem('In progress -not included'))
+                    self.handles['progress_table'].item(i,3).setBackground(QtGui.QColor('yellow'))
                     
             dir_now = os.path.join(self.target_movie_directory,file[:-4])
             tiff_now = os.path.join(self.target_movie_directory,file[:-4],file)
@@ -221,6 +324,8 @@ class App(QDialog):
                 else:
                     registration_finished = False
                 self.handles['progress_table'].setItem(i,0, QTableWidgetItem(file))
+            else:
+                registration_finished = False
             if registration_finished:
                 regtime = int(float(reg_dict['registration_finished_time'])-float(reg_dict['registration_started_time']))
                 self.handles['progress_table'].setItem(i,1, QTableWidgetItem('Done in {} s'.format(regtime)))
@@ -232,7 +337,33 @@ class App(QDialog):
             else:
                 self.handles['progress_table'].setItem(i,1, QTableWidgetItem('Not started'))
                 self.handles['progress_table'].item(i,1).setBackground(QtGui.QColor('red'))
-
+    
+    def find_available_sessions(self):
+        setup = self.handles['setup_select'].currentText()
+        subject = self.handles['subject_select'].currentText()
+        try:
+            sessions = os.listdir(os.path.join(self.target_movie_directory_base,setup,subject))
+        except:
+            sessions = []
+# =============================================================================
+#         try:
+#             self.handles['session_select'].currentIndexChanged.disconnect()
+#         except:
+#             pass
+# =============================================================================
+        self.handles['session_select'].clear()
+        self.handles['session_select'].addItems(sessions)
+        #self.handles['subject_select'].currentIndexChanged.connect(lambda: self.update_session())
+        if len(sessions)>0:
+            self.update_session()
+    
+    def update_session(self):
+        setup = self.handles['setup_select'].currentText()
+        subject = self.handles['subject_select'].currentText()
+        session = self.handles['session_select'].currentText()
+        self.handles['session'].setText(session)
+        self.target_movie_directory = os.path.join(self.target_movie_directory_base,setup,subject,session)
+    
     def update_exp_details(self):
         setup = self.handles['setup_select'].currentText()
         subject = self.handles['subject_select'].currentText()
@@ -240,6 +371,25 @@ class App(QDialog):
         self.target_movie_directory = os.path.join(self.target_movie_directory_base,setup,subject,session)
         sp2_params_file = os.path.join(self.target_movie_directory,'s2p_params.json')
         Path(self.target_movie_directory).mkdir(parents = True,exist_ok = True)
+        
+        setup = self.handles['setup_select'].currentText()
+        subject = self.handles['subject_select'].currentText()
+        try:
+            sessions = os.listdir(os.path.join(self.target_movie_directory_base,setup,subject))
+        except:
+            sessions = []
+# =============================================================================
+#         try:            
+#             self.handles['session_select'].currentIndexChanged.disconnect()
+#         except:
+#             pass
+# =============================================================================
+            #self.handles['session_select'].currentIndexChanged.disconnect()
+        self.handles['session_select'].clear()
+        self.handles['session_select'].addItems(sessions)
+        #self.handles['subject_select'].currentIndexChanged.connect(lambda: self.update_session())
+        
+        
         with open(sp2_params_file, "w") as data_file:
                 json.dump(self.s2p_params, data_file, indent=2)
         #% Check for new .tiff files in a given directory and copy them when they are finished - should be run every few seconds
@@ -249,27 +399,49 @@ class App(QDialog):
                            'session':session}
         with open(copyfile_json_file, "w") as data_file:
                 json.dump(copyfile_params, data_file, indent=2)
+        try:
+            self.update_progress_table()
+        except:
+            pass
         
-        self.update_progress_table()
         
         
-        
-    def generate_reference_image(self):
+    def generate_reference_image(self): #TODO save when it starts and if it is finished yet.
+        reference_movie_dir = os.path.join(self.target_movie_directory,'_reference_image')
+        Path(reference_movie_dir).mkdir(parents = True,exist_ok = True)
+        reference_movie_json = os.path.join(self.target_movie_directory,'_reference_image','refimage_progress.json')
+        try:
+            with open(reference_movie_json, "r") as read_file:
+                refimage_dict = json.load(read_file)
+            if refimage_dict['ref_image_finished'] == False:
+                print('reference image search is already on the way, canceling')
+                return
+        except:
+            pass
+        refimage_dict = {'ref_image_started':True,
+                         'ref_image_finished':False,
+                         'ref_image_started_time': str(time.time())}
+        with open(reference_movie_json, "w") as data_file:
+            json.dump(refimage_dict, data_file, indent=2)
         trial_num_to_use = int(self.handles['refimage_movienum'].currentText())
         #%
-        if not os.path.exists(os.path.join(self.target_movie_directory,'mean_image.npy')):
-            cluster_command_list = ['eval "$(conda shell.bash hook)"',
-                                    'conda activate suite2p',
-                                    'cd ~/Scripts/Python/BCI_pipeline/',
-                                    'python cluster_helper.py {} "\'{}\'" {}'.format('utils_imaging.generate_mean_image_from_trials',self.target_movie_directory,trial_num_to_use)]
-            with open("/groups/svoboda/home/rozsam/Scripts/runBCI.sh","w") as shfile:
-                #shfile.writelines(cluster_command_list) 
-                for L in cluster_command_list:
-                    shfile.writelines(L+'\n') 
-            bash_command = "bsub -n 1 -J BCI_job 'sh /groups/svoboda/home/rozsam/Scripts/runBCI.sh > ~/Scripts/BCI_output.txt'"
-            os.system(bash_command)
-        else:
-            print('reference image is already present')
+# =============================================================================
+#         if not os.path.exists(os.path.join(self.target_movie_directory,'mean_image.npy')):
+# =============================================================================
+        cluster_command_list = ['eval "$(conda shell.bash hook)"',
+                                'conda activate suite2p',
+                                'cd ~/Scripts/Python/BCI_pipeline/',
+                                'python cluster_helper.py {} "\'{}\'" {}'.format('utils_imaging.generate_mean_image_from_trials',self.target_movie_directory,trial_num_to_use)]
+        with open("/groups/svoboda/home/rozsam/Scripts/runBCI.sh","w") as shfile:
+            #shfile.writelines(cluster_command_list) 
+            for L in cluster_command_list:
+                shfile.writelines(L+'\n') 
+        bash_command = "bsub -n 1 -J BCI_job 'sh /groups/svoboda/home/rozsam/Scripts/runBCI.sh > ~/Scripts/BCI_output.txt'"
+        os.system(bash_command)
+# =============================================================================
+#         else:
+#             print('reference image is already present')
+# =============================================================================
         print('reference image is being generated')
     def do_motion_correction(self):
         file_dict = np.load(os.path.join(self.target_movie_directory,'copy_data.npy'),allow_pickle = True).tolist()
@@ -328,6 +500,15 @@ class App(QDialog):
         core_num_to_use = int(self.handles['celldetect_corenum'].currentText())
         concatenated_movie_dir = os.path.join(self.target_movie_directory,'_concatenated_movie')
         full_movie_dir = concatenated_movie_dir
+        try:
+            roifindjson_file = os.path.join(full_movie_dir,'roifind_progress.json')
+            with open(roifindjson_file, "r") as read_file:
+                roifind_progress_dict = json.load(read_file)
+            if roifind_progress_dict['roifind_started'] and not roifind_progress_dict['roifind_finished']:
+                print('roi segmentation is already running, aborting')
+                return None
+        except:
+            pass
         #%
         cluster_command_list = ['eval "$(conda shell.bash hook)"',
                                 'conda activate suite2p',
@@ -337,7 +518,21 @@ class App(QDialog):
         bash_command = r"bsub -n {} -J BCI_ROIfind '{} > {}'".format(core_num_to_use,' && '.join(cluster_command_list),cluster_output_file)
         os.system(bash_command) # -o /dev/null
         print('detecting cells')
+        
+    def registration_metrics(self):
+        core_num_to_use = int(self.handles['regmetrics_corenum'].currentText())
+        concatenated_movie_dir = os.path.join(self.target_movie_directory,'_concatenated_movie')
+        full_movie_dir = concatenated_movie_dir
+        cluster_command_list = ['eval "$(conda shell.bash hook)"',
+                                'conda activate suite2p',
+                                'cd ~/Scripts/Python/BCI_pipeline/',
+                                "python cluster_helper.py {} '\"{}\"'".format('utils_imaging.registration_metrics',full_movie_dir)]
+        cluster_output_file = os.path.join(full_movie_dir,'s2p_registration_metrics_output.txt')
+        bash_command = r"bsub -n {} -J BCI_registration_metric '{} > {}'".format(core_num_to_use,' && '.join(cluster_command_list),cluster_output_file)
+        os.system(bash_command) # -o /dev/null
     def start_s2p(self):
+        concatenated_movie_dir = os.path.join(self.target_movie_directory,'_concatenated_movie')
+        os.system('cd {}; python -m suite2p &'.format(concatenated_movie_dir))
         print('starting s2p')
         
         
