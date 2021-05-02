@@ -38,18 +38,261 @@ def find_pybpod_sessions(subject_names_list,date_now,projects):
     return outdict
 
 
+def export_pybpod_files_core(bpod_session_dict,calcium_imaging_raw_session_dir):
+    #%%
+    behavior_dict_list = list()
+    sessionfile_start_times = list()
+    for sessionfile in bpod_session_dict['sessions']:
+        csvfile = sessionfile.filepath
+        csv_data = utils_pybpod.load_and_parse_a_csv_file(csvfile)
+        behavior_dict = utils_pybpod.minethedata(csv_data,extract_variables = True)
+        subject_name = csv_data['subject'][0]
+        setup_name = csv_data['setup'][0]
+        experimenter_name = csv_data['experimenter'][0]
+        zaber_dict = utils_pybpod.generate_zaber_info_for_pybpod_dict(behavior_dict,subject_name,setup_name,zaber_folder_root = '/home/rozmar/Data/Behavior/BCI_Zaber_data')
+        zaber_step_times = list()
+        for v,a,s in zip(zaber_dict['speed'],zaber_dict['acceleration'],zaber_dict['trigger_step_size']):
+            zaber_step_times.append(utils_pybpod.calculate_step_time(s/1000,v,a))
+        zaber_dict['trigger_step_time'] =np.asarray(zaber_step_times)
+        for key in zaber_dict.keys():
+            behavior_dict['zaber_{}'.format(key)] = zaber_dict[key]
+        trialnum = len(behavior_dict['trial_num'])
+        behavior_dict['bpod_file_names'] = np.asarray([sessionfile.filepath.split('/')[-1]]*trialnum)
+        
+        behavior_dict['subject_name'] = np.asarray([subject_name]*trialnum)
+        behavior_dict['setup_name'] = np.asarray([setup_name]*trialnum)
+        behavior_dict['experimenter_name'] = np.asarray([experimenter_name]*trialnum)
+        if trialnum>0:
+            behavior_dict_list.append(behavior_dict)
+            sessionfile_start_times.append(behavior_dict['trial_start_times'][0])
+        #%
+    if len(behavior_dict_list) == 0:
+        print('no behavior found')
+        #timer.sleep(10)
+        return None
+    #if  len(behavior_dict_list)>1:
+        #%
+    order = np.argsort(sessionfile_start_times)
+    behavior_dict_list = np.asarray(behavior_dict_list)[order]
+    behavior_dict = {}
+    for key in behavior_dict_list[0].keys():
+        keylist = list()
+        for behavior_dict_now in behavior_dict_list:
+            for element in behavior_dict_now[key]:
+                keylist.append(element)
+        behavior_dict[key] = np.asarray(keylist)
+        
+    
+    files = utils_io.extract_files_from_dir(calcium_imaging_raw_session_dir)
+    tiffiles = files['exts']=='.tif'
+    uniquebasenames = np.unique(files['basenames'][tiffiles])
+    filenames_all = list()
+    frame_timestamps_all = list()
+    nextfile_timestamps_all = list()
+    acqtrigger_timestamps_all = list()
+    trigger_arrived_timestamps_all = list()
+    scanimage_integration_roi_data_all = list()
+    for basename in uniquebasenames:
+        #%
+        file_idxs_now = (files['exts']=='.tif') & (files['basenames']==basename)
+        filenames = files['filenames'][file_idxs_now]
+        fileindices = files['fileindices'][file_idxs_now]
+        order = np.argsort(fileindices)
+        filenames = filenames[order]
+        for filename in filenames:
+            try:
+                metadata = utils_imaging.extract_scanimage_metadata(os.path.join(calcium_imaging_raw_session_dir,filename))
+                
+            except:
+                print('tiff file read error: {}'.format(os.path.join(calcium_imaging_raw_session_dir,filename)))
+                continue
+           
+            movie_start_time = metadata['movie_start_time']
+            
+            if float(metadata['description_first_frame']['frameTimestamps_sec'])<0:
+                valence=-1
+            else:
+                valence = 1
+            frame_timestamp = movie_start_time+valence*datetime.timedelta(seconds = np.abs(float(metadata['description_first_frame']['frameTimestamps_sec'])))
+            
+            if float(metadata['description_first_frame']['acqTriggerTimestamps_sec'])<0:
+                valence=-1
+            else:
+                valence = 1
+            acqtrigger_timestamp = movie_start_time+valence*datetime.timedelta(seconds = np.abs(float(metadata['description_first_frame']['acqTriggerTimestamps_sec'])))
+            if float(metadata['description_first_frame']['nextFileMarkerTimestamps_sec'])<0:
+                valence=-1
+            else:
+                valence = 1
+            nextfile_timestamp = movie_start_time+valence*datetime.timedelta(seconds = np.abs(float(metadata['description_first_frame']['nextFileMarkerTimestamps_sec'])))
+            if float(metadata['description_first_frame']['nextFileMarkerTimestamps_sec']) == -1:
+                trigger_arrived_timestamp =acqtrigger_timestamp
+            else:
+                trigger_arrived_timestamp = nextfile_timestamp
+                
+            filenames_all.append(filename)
+            frame_timestamps_all.append(frame_timestamp)
+            nextfile_timestamps_all.append(nextfile_timestamp)
+            acqtrigger_timestamps_all.append(acqtrigger_timestamp)
+            
+            trignextstopenable = 'true' in metadata['metadata']['hScan2D']['trigNextStopEnable'].lower()
+            if metadata['metadata']['extTrigEnable'] == '0':
+                trigger_arrived_timestamps_all.append(np.nan)
+                print('not triggered')
+            else:
+                trigger_arrived_timestamps_all.append(trigger_arrived_timestamp)
+            try:
+                integration_roi_data = {}
+                integration_roi_data['outputChannelsEnabled'] = np.asarray(metadata['metadata']['hIntegrationRoiManager']['outputChannelsEnabled'].strip('[]').split(' '))=='true'
+                integration_roi_data['outputChannelsNames'] = metadata['metadata']['hIntegrationRoiManager']['outputChannelsNames'].strip("{}").replace("'","").split(' ')
+                integration_roi_data['outputChannelsRoiNames'] = eval(metadata['metadata']['hIntegrationRoiManager']['outputChannelsRoiNames'].replace('{','[').replace('}',']').replace(' ',','))
+                integration_roi_data['outputChannelsFunctions'] = eval(metadata['metadata']['hIntegrationRoiManager']['outputChannelsFunctions'].replace('{','[').replace('}',']').replace(' ',','))
+            except:
+                integration_roi_data = {}
+                integration_roi_data['outputChannelsEnabled'] = []
+                integration_roi_data['outputChannelsNames'] = []
+                integration_roi_data['outputChannelsRoiNames'] = []
+                integration_roi_data['outputChannelsFunctions'] = []
+                print('no ROI data')
+            scanimage_integration_roi_data_all.append(integration_roi_data)
+                #print('triggered')
+            
+    #%
+    filenames_all = np.asarray(filenames_all)
+    frame_timestamps_all= np.asarray(frame_timestamps_all)
+    nextfile_timestamps_all= np.asarray(nextfile_timestamps_all)
+    acqtrigger_timestamps_all= np.asarray(acqtrigger_timestamps_all)
+    trigger_arrived_timestamps_all = np.asarray(trigger_arrived_timestamps_all)
+    scanimage_integration_roi_data_all = np.asarray(scanimage_integration_roi_data_all)
+    
+    file_order = np.argsort(frame_timestamps_all)
+    
+    filenames_all = filenames_all[file_order]
+    frame_timestamps_all = frame_timestamps_all[file_order]
+    nextfile_timestamps_all = nextfile_timestamps_all[file_order]
+    acqtrigger_timestamps_all = acqtrigger_timestamps_all[file_order]
+    trigger_arrived_timestamps_all = trigger_arrived_timestamps_all[file_order]
+    scanimage_integration_roi_data_all = scanimage_integration_roi_data_all[file_order]
+    
+    istriggered = list()
+    for stamp in trigger_arrived_timestamps_all: istriggered.append(type(stamp)==datetime.datetime)
+    
+    
+    bpod_trial_start_times = behavior_dict['trial_start_times']
+    #%
+    dist_list = list()
+    for i,t_now in enumerate(bpod_trial_start_times):
+        for t_next in trigger_arrived_timestamps_all[istriggered]:
+            dt = (t_next-t_now).total_seconds()
+            if np.abs(dt)<50:
+                dist_list.append(dt)
+    dist_list = np.asarray(dist_list)
+    #%
+    residual_filenames = filenames_all
+    residual_timestamps = trigger_arrived_timestamps_all
+    if len(dist_list)>0:
+        center_sec = mode(np.asarray(dist_list,int))
+        dist_list = dist_list[(dist_list>center_sec-1) &  (dist_list<center_sec+1)]
+        time_offset = np.median(dist_list)
+        print('time_offset: {} s'.format(time_offset))
+        #%
+        bpod_trial_file_names = list()
+        bpod_scanimage_time_offset = list()
+        scanimage_frame_time_offset = list()
+        for roikey in integration_roi_data.keys():
+            behavior_dict['scanimage_roi_{}'.format(roikey)] = list()
+            
+        for trial_start_time,trial_end_time in zip(behavior_dict['trial_start_times'],behavior_dict['trial_end_times']):
+            trial_start_time = trial_start_time +datetime.timedelta(seconds = time_offset-.5) #gets a 0.5 second extra
+            trial_end_time = trial_end_time +datetime.timedelta(seconds = time_offset)
+            movie_idxes = (trigger_arrived_timestamps_all[istriggered]>trial_start_time) & (trigger_arrived_timestamps_all[istriggered]<trial_end_time)
+            if any(movie_idxes):
+                if sum(movie_idxes) == 1:
+                    moviename = np.asarray(filenames_all[istriggered][movie_idxes])
+                else:
+                    moviename = np.asarray(filenames_all[istriggered][movie_idxes])
+                movie_trial_time_offset = (trigger_arrived_timestamps_all[istriggered][movie_idxes][0]-(trial_start_time- datetime.timedelta(seconds = time_offset-.5))).total_seconds()
+                trigger_to_frame_offset = (frame_timestamps_all[istriggered][movie_idxes][0]-trigger_arrived_timestamps_all[istriggered][movie_idxes][0]).total_seconds()
+                roidata = scanimage_integration_roi_data_all[istriggered][movie_idxes][0]
+            else:
+                moviename = 'no movie for this trial'
+                movie_trial_time_offset = np.nan
+                trigger_to_frame_offset  = np.nan
+                roidata=np.nan
+            bpod_trial_file_names.append(moviename)
+            bpod_scanimage_time_offset.append(movie_trial_time_offset)
+            scanimage_frame_time_offset.append(trigger_to_frame_offset)
+            for moviename_now in moviename:
+                idx = residual_filenames !=moviename_now
+                residual_filenames = residual_filenames[idx]
+                residual_timestamps = residual_timestamps[idx]
+            for roikey in integration_roi_data.keys():
+                try:
+                    behavior_dict['scanimage_roi_{}'.format(roikey)].append(roidata[roikey])
+                except:
+                    behavior_dict['scanimage_roi_{}'.format(roikey)].append([])
+            #
+            #%
+        behavior_dict['scanimage_file_names'] = bpod_trial_file_names
+        behavior_dict['scanimage_bpod_time_offset'] = np.asarray(bpod_scanimage_time_offset)
+        behavior_dict['scanimage_first_frame_offset'] = np.asarray(scanimage_frame_time_offset)
+    else:
+        print('no movie-behavior correspondance found ')
+        behavior_dict['scanimage_file_names'] = 'no movie files found'
+    #%  %
+    #%
+    triggered = list()
+    residual_tiff_files = {'median_bpod_si_time_offset':time_offset,
+                           'triggered':list(),
+                           'time_from_previous_trial_start' : list(),
+                           'time_to_next_trial_start' : list(),
+                           'previous_trial_index': list(),
+                           'next_trial_index' : list(),
+                           'scanimage_file_names':list()}
+    for scanimage_fname, scanimage_timestamp in zip(residual_filenames,residual_timestamps):
+        if type(scanimage_timestamp) == float:
+            residual_tiff_files['triggered'].append(False)
+            movie_start_time_now = frame_timestamps_all[filenames_all==scanimage_fname][0] - datetime.timedelta(seconds = time_offset)
+        else:
+            residual_tiff_files['triggered'].append(True)
+            movie_start_time_now = scanimage_timestamp - datetime.timedelta(seconds = time_offset)
+        if any(behavior_dict['trial_start_times']>movie_start_time_now):
+            next_trial_idx = np.where(behavior_dict['trial_start_times']>movie_start_time_now)[0][0]
+            time_to_next_trial = (behavior_dict['trial_start_times'][next_trial_idx]-movie_start_time_now).total_seconds()# + time_offset
+        else:
+            next_trial_idx = np.nan
+            time_to_next_trial = np.nan
+        
+        if any(behavior_dict['trial_start_times']<movie_start_time_now):
+            prev_trial_idx = np.where(behavior_dict['trial_start_times']<movie_start_time_now)[0][-1]
+            time_from_prev_trial = (movie_start_time_now-behavior_dict['trial_start_times'][prev_trial_idx]).total_seconds() #- time_offset
+        else:
+            prev_trial_idx = np.nan
+            time_from_prev_trial = np.nan
+        
+        residual_tiff_files['time_from_previous_trial_start'].append( time_from_prev_trial)
+        residual_tiff_files['time_to_next_trial_start'].append( time_to_next_trial)
+        
+        residual_tiff_files['previous_trial_index'].append( prev_trial_idx)
+        residual_tiff_files['next_trial_index'].append( next_trial_idx)
+        residual_tiff_files['scanimage_file_names'].append(scanimage_fname)
+        
+    #%
+    behavior_dict['residual_tiff_files'] = residual_tiff_files
+    #%%
+    return behavior_dict
 
 
 #%% this script will export behavior and pair it to imaging, then save it in a neat directory structure
 def export_pybpod_files(overwrite=False,behavior_export_basedir = '/home/rozmar/Data/Behavior/BCI_exported'):
 #overwrite = False
+#%%
 # =============================================================================
-# #%%
-#     overwrite=True
+#     overwrite=False
 #     behavior_export_basedir = '/home/rozmar/Data/Behavior/BCI_exported'
-#     
-#     #%%
 # =============================================================================
+    
+    #%%
     calcium_imaging_raw_basedir = dj.config['locations.imagingdata_raw']
     raw_behavior_dirs =  dj.config['locations.behavior_dirs_raw'] 
     
@@ -85,256 +328,14 @@ def export_pybpod_files(overwrite=False,behavior_export_basedir = '/home/rozmar/
                         continue
                     bpod_session_dict = find_pybpod_sessions([subject_wr_name,subject],session_date.strftime('%Y%m%d'),projects)
                     #%
-                    behavior_dict_list = list()
-                    sessionfile_start_times = list()
-                    for sessionfile in bpod_session_dict['sessions']:
-                        csvfile = sessionfile.filepath
-                        csv_data = utils_pybpod.load_and_parse_a_csv_file(csvfile)
-                        behavior_dict = utils_pybpod.minethedata(csv_data,extract_variables = True)
-                        subject_name = csv_data['subject'][0]
-                        setup_name = csv_data['setup'][0]
-                        experimenter_name = csv_data['experimenter'][0]
-# =============================================================================
-#                         behavior_dict['session_details']=  {'subject_name':subject_name,
-#                                                             'setup_name' : setup_name,
-#                                                             'experimenter_name' : experimenter_name}
-# =============================================================================
-                        zaber_dict = utils_pybpod.generate_zaber_info_for_pybpod_dict(behavior_dict,subject_name,setup_name,zaber_folder_root = '/home/rozmar/Data/Behavior/BCI_Zaber_data')
-                        zaber_step_times = list()
-                        for v,a,s in zip(zaber_dict['speed'],zaber_dict['acceleration'],zaber_dict['trigger_step_size']):
-                            zaber_step_times.append(utils_pybpod.calculate_step_time(s/1000,v,a))
-                        zaber_dict['trigger_step_time'] =np.asarray(zaber_step_times)
-                        for key in zaber_dict.keys():
-                            behavior_dict['zaber_{}'.format(key)] = zaber_dict[key]
-                        trialnum = len(behavior_dict['trial_num'])
-                        behavior_dict['bpod_file_names'] = np.asarray([sessionfile.filepath.split('/')[-1]]*trialnum)
-                        
-                        behavior_dict['subject_name'] = np.asarray([subject_name]*trialnum)
-                        behavior_dict['setup_name'] = np.asarray([setup_name]*trialnum)
-                        behavior_dict['experimenter_name'] = np.asarray([experimenter_name]*trialnum)
-                        if trialnum>0:
-                            behavior_dict_list.append(behavior_dict)
-                            sessionfile_start_times.append(behavior_dict['trial_start_times'][0])
-                        #%
-                    if len(behavior_dict_list) == 0:
-                        print('no behavior found for subject {} - session{}'.format(subject_wr_name,session))
-                        #timer.sleep(10)
+                    
+                    
+                    print('exporting behavior from {}/{}'.format(subject,session))
+                    behavior_dict = export_pybpod_files_core(bpod_session_dict,calcium_imaging_raw_session_dir) 
+                    if type(behavior_dict) != dict:
+                        print('skipping this one')
                         continue
-                    #if  len(behavior_dict_list)>1:
-                        #%
-                    order = np.argsort(sessionfile_start_times)
-                    behavior_dict_list = np.asarray(behavior_dict_list)[order]
-                    behavior_dict = {}
-                    for key in behavior_dict_list[0].keys():
-                        keylist = list()
-                        for behavior_dict_now in behavior_dict_list:
-                            for element in behavior_dict_now[key]:
-                                keylist.append(element)
-                        behavior_dict[key] = np.asarray(keylist)
-                        
-                        #%
-    # =============================================================================
-    #                     print('multiple bpod files, handle me')
-    #                     timer.sleep(10000)
-    # =============================================================================
-                    #%
                     
-                    files = utils_io.extract_files_from_dir(calcium_imaging_raw_session_dir)
-                    tiffiles = files['exts']=='.tif'
-                    uniquebasenames = np.unique(files['basenames'][tiffiles])
-                    filenames_all = list()
-                    frame_timestamps_all = list()
-                    nextfile_timestamps_all = list()
-                    acqtrigger_timestamps_all = list()
-                    trigger_arrived_timestamps_all = list()
-                    scanimage_integration_roi_data_all = list()
-                    for basename in uniquebasenames:
-                        #%
-                        file_idxs_now = (files['exts']=='.tif') & (files['basenames']==basename)
-                        filenames = files['filenames'][file_idxs_now]
-                        fileindices = files['fileindices'][file_idxs_now]
-                        order = np.argsort(fileindices)
-                        filenames = filenames[order]
-                        for filename in filenames:
-                            try:
-                                metadata = utils_imaging.extract_scanimage_metadata(os.path.join(calcium_imaging_raw_session_dir,filename))
-                                
-                            except:
-                                print('tiff file read error: {}'.format(os.path.join(calcium_imaging_raw_session_dir,filename)))
-                                continue
-                           
-                            movie_start_time = metadata['movie_start_time']
-                            
-                            if float(metadata['description_first_frame']['frameTimestamps_sec'])<0:
-                                valence=-1
-                            else:
-                                valence = 1
-                            frame_timestamp = movie_start_time+valence*datetime.timedelta(seconds = np.abs(float(metadata['description_first_frame']['frameTimestamps_sec'])))
-                            
-                            if float(metadata['description_first_frame']['acqTriggerTimestamps_sec'])<0:
-                                valence=-1
-                            else:
-                                valence = 1
-                            acqtrigger_timestamp = movie_start_time+valence*datetime.timedelta(seconds = np.abs(float(metadata['description_first_frame']['acqTriggerTimestamps_sec'])))
-                            if float(metadata['description_first_frame']['nextFileMarkerTimestamps_sec'])<0:
-                                valence=-1
-                            else:
-                                valence = 1
-                            nextfile_timestamp = movie_start_time+valence*datetime.timedelta(seconds = np.abs(float(metadata['description_first_frame']['nextFileMarkerTimestamps_sec'])))
-                            if float(metadata['description_first_frame']['nextFileMarkerTimestamps_sec']) == -1:
-                                trigger_arrived_timestamp =acqtrigger_timestamp
-                            else:
-                                trigger_arrived_timestamp = nextfile_timestamp
-                                
-                            filenames_all.append(filename)
-                            frame_timestamps_all.append(frame_timestamp)
-                            nextfile_timestamps_all.append(nextfile_timestamp)
-                            acqtrigger_timestamps_all.append(acqtrigger_timestamp)
-                            
-                            trignextstopenable = 'true' in metadata['metadata']['hScan2D']['trigNextStopEnable'].lower()
-                            if metadata['metadata']['extTrigEnable'] == '0':
-                                trigger_arrived_timestamps_all.append(np.nan)
-                                print('not triggered')
-                            else:
-                                trigger_arrived_timestamps_all.append(trigger_arrived_timestamp)
-                            try:
-                                integration_roi_data = {}
-                                integration_roi_data['outputChannelsEnabled'] = np.asarray(metadata['metadata']['hIntegrationRoiManager']['outputChannelsEnabled'].strip('[]').split(' '))=='true'
-                                integration_roi_data['outputChannelsNames'] = metadata['metadata']['hIntegrationRoiManager']['outputChannelsNames'].strip("{}").replace("'","").split(' ')
-                                integration_roi_data['outputChannelsRoiNames'] = eval(metadata['metadata']['hIntegrationRoiManager']['outputChannelsRoiNames'].replace('{','[').replace('}',']').replace(' ',','))
-                                integration_roi_data['outputChannelsFunctions'] = eval(metadata['metadata']['hIntegrationRoiManager']['outputChannelsFunctions'].replace('{','[').replace('}',']').replace(' ',','))
-                            except:
-                                integration_roi_data = {}
-                                integration_roi_data['outputChannelsEnabled'] = []
-                                integration_roi_data['outputChannelsNames'] = []
-                                integration_roi_data['outputChannelsRoiNames'] = []
-                                integration_roi_data['outputChannelsFunctions'] = []
-                                print('no ROI data')
-                            scanimage_integration_roi_data_all.append(integration_roi_data)
-                                #print('triggered')
-                            
-                    #%
-                    filenames_all = np.asarray(filenames_all)
-                    frame_timestamps_all= np.asarray(frame_timestamps_all)
-                    nextfile_timestamps_all= np.asarray(nextfile_timestamps_all)
-                    acqtrigger_timestamps_all= np.asarray(acqtrigger_timestamps_all)
-                    trigger_arrived_timestamps_all = np.asarray(trigger_arrived_timestamps_all)
-                    scanimage_integration_roi_data_all = np.asarray(scanimage_integration_roi_data_all)
-                    
-                    file_order = np.argsort(frame_timestamps_all)
-                    
-                    filenames_all = filenames_all[file_order]
-                    frame_timestamps_all = frame_timestamps_all[file_order]
-                    nextfile_timestamps_all = nextfile_timestamps_all[file_order]
-                    acqtrigger_timestamps_all = acqtrigger_timestamps_all[file_order]
-                    trigger_arrived_timestamps_all = trigger_arrived_timestamps_all[file_order]
-                    scanimage_integration_roi_data_all = scanimage_integration_roi_data_all[file_order]
-                    
-                    istriggered = list()
-                    for stamp in trigger_arrived_timestamps_all: istriggered.append(type(stamp)==datetime.datetime)
-                    
-                    
-                    bpod_trial_start_times = behavior_dict['trial_start_times']
-                    #%
-                    dist_list = list()
-                    for i,t_now in enumerate(bpod_trial_start_times):
-                        for t_next in trigger_arrived_timestamps_all[istriggered]:
-                            dt = (t_next-t_now).total_seconds()
-                            if np.abs(dt)<50:
-                                dist_list.append(dt)
-                    dist_list = np.asarray(dist_list)
-                    #%
-                    residual_filenames = filenames_all
-                    residual_timestamps = trigger_arrived_timestamps_all
-                    if len(dist_list)>0:
-                        center_sec = mode(np.asarray(dist_list,int))
-                        dist_list = dist_list[(dist_list>center_sec-1) &  (dist_list<center_sec+1)]
-                        time_offset = np.median(dist_list)
-                        print('time_offset: {} s'.format(time_offset))
-                        #%
-                        bpod_trial_file_names = list()
-                        bpod_scanimage_time_offset = list()
-                        scanimage_frame_time_offset = list()
-                        for roikey in integration_roi_data.keys():
-                            behavior_dict['scanimage_roi_{}'.format(roikey)] = list()
-                            
-                        for trial_start_time,trial_end_time in zip(behavior_dict['trial_start_times'],behavior_dict['trial_end_times']):
-                            trial_start_time = trial_start_time +datetime.timedelta(seconds = time_offset-.5) #gets a 0.5 second extra
-                            trial_end_time = trial_end_time +datetime.timedelta(seconds = time_offset)
-                            movie_idxes = (trigger_arrived_timestamps_all[istriggered]>trial_start_time) & (trigger_arrived_timestamps_all[istriggered]<trial_end_time)
-                            if any(movie_idxes):
-                                if sum(movie_idxes) == 1:
-                                    moviename = np.asarray(filenames_all[istriggered][movie_idxes])
-                                else:
-                                    moviename = np.asarray(filenames_all[istriggered][movie_idxes])
-                                movie_trial_time_offset = (trigger_arrived_timestamps_all[istriggered][movie_idxes][0]-(trial_start_time- datetime.timedelta(seconds = time_offset-.5))).total_seconds()
-                                trigger_to_frame_offset = (frame_timestamps_all[istriggered][movie_idxes][0]-trigger_arrived_timestamps_all[istriggered][movie_idxes][0]).total_seconds()
-                                roidata = scanimage_integration_roi_data_all[istriggered][movie_idxes][0]
-                            else:
-                                moviename = 'no movie for this trial'
-                                movie_trial_time_offset = np.nan
-                                trigger_to_frame_offset  = np.nan
-                                roidata=np.nan
-                            bpod_trial_file_names.append(moviename)
-                            bpod_scanimage_time_offset.append(movie_trial_time_offset)
-                            scanimage_frame_time_offset.append(trigger_to_frame_offset)
-                            for moviename_now in moviename:
-                                idx = residual_filenames !=moviename_now
-                                residual_filenames = residual_filenames[idx]
-                                residual_timestamps = residual_timestamps[idx]
-                            for roikey in integration_roi_data.keys():
-                                try:
-                                    behavior_dict['scanimage_roi_{}'.format(roikey)].append(roidata[roikey])
-                                except:
-                                    behavior_dict['scanimage_roi_{}'.format(roikey)].append([])
-                            #
-                            #%
-                        behavior_dict['scanimage_file_names'] = bpod_trial_file_names
-                        behavior_dict['scanimage_bpod_time_offset'] = np.asarray(bpod_scanimage_time_offset)
-                        behavior_dict['scanimage_first_frame_offset'] = np.asarray(scanimage_frame_time_offset)
-                    else:
-                        print('no movie-behavior correspondance found for {}'.format(session))
-                        behavior_dict['scanimage_file_names'] = 'no movie files found'
-                    #%  %
-                    #%
-                    triggered = list()
-                    residual_tiff_files = {'median_bpod_si_time_offset':time_offset,
-                                           'triggered':list(),
-                                           'time_from_previous_trial_start' : list(),
-                                           'time_to_next_trial_start' : list(),
-                                           'previous_trial_index': list(),
-                                           'next_trial_index' : list(),
-                                           'scanimage_file_names':list()}
-                    for scanimage_fname, scanimage_timestamp in zip(residual_filenames,residual_timestamps):
-                        if type(scanimage_timestamp) == float:
-                            residual_tiff_files['triggered'].append(False)
-                            movie_start_time_now = frame_timestamps_all[filenames_all==scanimage_fname][0] - datetime.timedelta(seconds = time_offset)
-                        else:
-                            residual_tiff_files['triggered'].append(True)
-                            movie_start_time_now = scanimage_timestamp - datetime.timedelta(seconds = time_offset)
-                        if any(behavior_dict['trial_start_times']>movie_start_time_now):
-                            next_trial_idx = np.where(behavior_dict['trial_start_times']>movie_start_time_now)[0][0]
-                            time_to_next_trial = (behavior_dict['trial_start_times'][next_trial_idx]-movie_start_time_now).total_seconds()# + time_offset
-                        else:
-                            next_trial_idx = np.nan
-                            time_to_next_trial = np.nan
-                        
-                        if any(behavior_dict['trial_start_times']<movie_start_time_now):
-                            prev_trial_idx = np.where(behavior_dict['trial_start_times']<movie_start_time_now)[0][-1]
-                            time_from_prev_trial = (movie_start_time_now-behavior_dict['trial_start_times'][prev_trial_idx]).total_seconds() #- time_offset
-                        else:
-                            prev_trial_idx = np.nan
-                            time_from_prev_trial = np.nan
-                        
-                        residual_tiff_files['time_from_previous_trial_start'].append( time_from_prev_trial)
-                        residual_tiff_files['time_to_next_trial_start'].append( time_to_next_trial)
-                        
-                        residual_tiff_files['previous_trial_index'].append( prev_trial_idx)
-                        residual_tiff_files['next_trial_index'].append( next_trial_idx)
-                        residual_tiff_files['scanimage_file_names'].append(scanimage_fname)
-                        
-                    #%
-                    behavior_dict['residual_tiff_files'] = residual_tiff_files
                     bpod_export_dir = os.path.join(behavior_export_basedir,setup,subject)
                     Path(bpod_export_dir).mkdir(parents=True, exist_ok=True)
                     bpod_export_file = '{}-bpod_zaber.npy'.format(session)
