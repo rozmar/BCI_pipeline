@@ -195,62 +195,65 @@ class App(QDialog):
             return
         else:
             self.plotinprogress = True
-            
-        try:
-            roifindjson_file = os.path.join(self.target_movie_directory,'_concatenated_movie','roifind_progress.json')
-            with open(roifindjson_file, "r") as read_file:
-                roifind_progress_dict = json.load(read_file)
-            if not roifind_progress_dict['roifind_finished']:
-                roifindcolor = 'red'
-            else:
+        
+        try:    
+            try:
+                roifindjson_file = os.path.join(self.target_movie_directory,'_concatenated_movie','roifind_progress.json')
+                with open(roifindjson_file, "r") as read_file:
+                    roifind_progress_dict = json.load(read_file)
+                if not roifind_progress_dict['roifind_finished']:
+                    roifindcolor = 'red'
+                else:
+                    roifindcolor = 'green'
+            except:
                 roifindcolor = 'green'
-        except:
-            roifindcolor = 'green'
-            
-        try:
-            concatenated_movie_filelist_json = os.path.join(self.target_movie_directory,'_concatenated_movie','filelist.json')
-            with open(concatenated_movie_filelist_json, "r") as read_file:
-                filelist_dict = json.load(read_file)
-            if filelist_dict['concatenation_underway']:
-                concatenationcolor = 'red'
-                roifindcolor = 'red'
-            else:
+                
+            try:
+                concatenated_movie_filelist_json = os.path.join(self.target_movie_directory,'_concatenated_movie','filelist.json')
+                with open(concatenated_movie_filelist_json, "r") as read_file:
+                    filelist_dict = json.load(read_file)
+                if filelist_dict['concatenation_underway']:
+                    concatenationcolor = 'red'
+                    roifindcolor = 'red'
+                else:
+                    concatenationcolor = 'green'
+            except:
                 concatenationcolor = 'green'
-        except:
-            concatenationcolor = 'green'
-        
-        
-        
             
-        self.handles['concatenate_start'].setStyleSheet("background-color : {}".format(concatenationcolor))
-        self.handles['celldetect_start'].setStyleSheet("background-color : {}".format(roifindcolor))
-        
-        try:
-            meanimage_dict = np.load(os.path.join(self.target_movie_directory,'mean_image.npy'),allow_pickle = True).tolist()
-            refImg = meanimage_dict['refImg']
-            self.handles['meanimage_plot'].axes.imshow(refImg)
-        except:
-            self.handles['meanimage_plot'].axes.imshow(np.zeros([10,10]))
-        self.handles['meanimage_plot'].draw()
-        if self.handles['concatenate_auto'].isChecked() and concatenationcolor == 'green':
-            self.concatenate_movies()
             
-        if self.handles['motioncorr_auto'].isChecked():
-            self.do_motion_correction()
-        try:
-            self.update_progress_table()
-        except:
-            print('could not plot')
-            self.handles['progress_table'].setRowCount(1)
-            self.handles['progress_table'].setItem(0,0, QTableWidgetItem('no data'))
-            self.handles['progress_table'].setItem(0,1, QTableWidgetItem('no data'))
-            self.handles['progress_table'].setItem(0,2, QTableWidgetItem('no data'))
-            self.handles['progress_table'].setItem(0,3, QTableWidgetItem('no data'))
             
-        copyfile_json_file = os.path.join(self.target_movie_directory_base,'copyfile.json')
-        with open(copyfile_json_file, "r") as read_file:
-            copyfile_params = json.load(read_file)
-        self.handles['active_experiment_text'].setText('Current Setup: {}, Subject: {}, Session:{}'.format(copyfile_params['setup'],copyfile_params['subject'],copyfile_params['session']))
+                
+            self.handles['concatenate_start'].setStyleSheet("background-color : {}".format(concatenationcolor))
+            self.handles['celldetect_start'].setStyleSheet("background-color : {}".format(roifindcolor))
+            self.handles['meanimage_plot'].axes.clear()
+            try:
+                meanimage_dict = np.load(os.path.join(self.target_movie_directory,'mean_image.npy'),allow_pickle = True).tolist()
+                refImg = meanimage_dict['refImg']
+                self.handles['meanimage_plot'].axes.imshow(refImg)
+            except:
+                self.handles['meanimage_plot'].axes.imshow(np.zeros([10,10]))
+            self.handles['meanimage_plot'].draw()
+            if self.handles['concatenate_auto'].isChecked() and concatenationcolor == 'green':
+                self.concatenate_movies()
+                
+            if self.handles['motioncorr_auto'].isChecked():
+                self.do_motion_correction()
+            try:
+                self.update_progress_table()
+            except:
+                print('could not plot')
+                self.handles['progress_table'].setRowCount(1)
+                self.handles['progress_table'].setItem(0,0, QTableWidgetItem('no data'))
+                self.handles['progress_table'].setItem(0,1, QTableWidgetItem('no data'))
+                self.handles['progress_table'].setItem(0,2, QTableWidgetItem('no data'))
+                self.handles['progress_table'].setItem(0,3, QTableWidgetItem('no data'))
+                
+            copyfile_json_file = os.path.join(self.target_movie_directory_base,'copyfile.json')
+            with open(copyfile_json_file, "r") as read_file:
+                copyfile_params = json.load(read_file)
+            self.handles['active_experiment_text'].setText('Current Setup: {}, Subject: {}, Session:{}'.format(copyfile_params['setup'],copyfile_params['subject'],copyfile_params['session']))
+        except:
+            pass
         self.plotinprogress = False
         print('update done {}'.format(time.time()))
         

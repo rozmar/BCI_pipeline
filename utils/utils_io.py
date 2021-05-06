@@ -6,7 +6,7 @@ from ScanImageTiffReader import ScanImageTiffReader
 import json
 import datetime
 import time
-
+#%%
 def extract_scanimage_metadata(file): # this is a duplicate function - also in utils_imaging
     #%
     image = ScanImageTiffReader(file)
@@ -234,6 +234,7 @@ def concatenate_suite2p_files(target_movie_directory):
     Path(concatenated_movie_dir).mkdir(parents = True,exist_ok = True)
     concatenated_movie_file = os.path.join(target_movie_directory,'_concatenated_movie','data.bin')
     concatenated_movie_ops = os.path.join(target_movie_directory,'_concatenated_movie','ops.npy')
+    meanimg_file = os.path.join(target_movie_directory,'_concatenated_movie','meanImg.npy')
     concatenated_movie_filelist_json = os.path.join(target_movie_directory,'_concatenated_movie','filelist.json')
     try:
         with open(concatenated_movie_filelist_json, "r") as read_file:
@@ -250,7 +251,7 @@ def concatenate_suite2p_files(target_movie_directory):
 #             break
 # =============================================================================
         #try:
-            #%%
+            #%
         print(file)
         dir_now = os.path.join(target_movie_directory,file[:-4])
         try:
@@ -281,25 +282,34 @@ def concatenate_suite2p_files(target_movie_directory):
             filelist_dict['frame_num_list'].append(ops['nframes'])
             filelist_dict['file_added_time'].append(str(datetime.datetime.now()))
             filelist_dict['concatenation_underway'] = True
+            meanimg_list = np.asarray([ops['meanImg']])
+            np.save(meanimg_file,meanimg_list)
         else:
+            
             #%
             with open(concatenated_movie_file, "ab") as myfile, open(sourcefile, "rb") as file2:
                 myfile.write(file2.read())
             if not concatenated_ops_loaded:
                 ops_concatenated = np.load(concatenated_movie_ops,allow_pickle = True).tolist()
+                meanimg_list = np.load(meanimg_file)
                 concatenated_ops_loaded = True
-                #%%
+            
+            meanimg_list = np.concatenate([meanimg_list,[ops['meanImg']]])
+            
             for key in ops.keys():
-                #%%
+                if key == 'do_regmetrics':
+                    continue
+                
+                #%
                 addlist = False
                 try:
-                    if ops[key]!=ops_concatenated[key] or key in ['xrange','yrange','nframes','frames_per_file','frames_per_folder']:
+                    if ops[key]!=ops_concatenated[key] or key in ['xrange','yrange','nframes','frames_per_file','frames_per_folder','tPC']:
                         addlist = True
                         #print(key)
                 except:
                     addlist = True
                     #print('error:' + key)
-                #%%
+                #%
                 if not addlist:
                     continue
                 if file_idx == 1:
@@ -323,7 +333,7 @@ def concatenate_suite2p_files(target_movie_directory):
                 
                     
                     
-            #%%        
+            #%     
             
             filelist_dict['file_name_list'].append(file)
             filelist_dict['frame_num_list'].append(ops['nframes'])
@@ -341,4 +351,5 @@ def concatenate_suite2p_files(target_movie_directory):
     filelist_dict['concatenation_underway'] = False
     with open(concatenated_movie_filelist_json, "w") as data_file:
         json.dump(filelist_dict, data_file, indent=2)
-    np.save(concatenated_movie_ops,ops_concatenated)        
+    np.save(concatenated_movie_ops,ops_concatenated)   
+    np.save(meanimg_file,meanimg_list)     

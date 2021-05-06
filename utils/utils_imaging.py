@@ -192,6 +192,7 @@ def register_trial(target_movie_directory,file):
     ops['refImg'] = refImg
     ops['force_refImg'] = True
     print('regstering {}'.format(tiff_now))
+    ops['do_regmetrics'] = False
     ops = run_s2p(ops)
 # =============================================================================
 #     plane_times = {}
