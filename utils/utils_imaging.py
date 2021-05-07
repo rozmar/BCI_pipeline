@@ -130,6 +130,7 @@ def extract_scanimage_metadata(file): # this function is also in utils_io
     return out
 
 def register_trial(target_movie_directory,file):
+    #%%
     with open(os.path.join(target_movie_directory,'s2p_params.json'), "r") as read_file:
         s2p_params = json.load(read_file)
     dir_now = os.path.join(target_movie_directory,file[:-4])
@@ -193,7 +194,26 @@ def register_trial(target_movie_directory,file):
     ops['force_refImg'] = True
     print('regstering {}'.format(tiff_now))
     ops['do_regmetrics'] = False
+    #%%
     ops = run_s2p(ops)
+    
+    
+    if len(s2p_params['z_stack_name'])>0:
+        #%%
+        file = s2p_params['z_stack_name']
+        #%
+# =============================================================================
+#         target_movie_directory = '/groups/svoboda/home/rozsam/Data/BCI_data/DOM3-MMIMS/BCI_07/2021-02-25'
+#         file = 'zstack_motion_corr_00001.tif'
+# =============================================================================
+        zstack_tiff = os.path.join(target_movie_directory,file[:-4],file)
+        reader=ScanImageTiffReader(zstack_tiff)
+        stack=reader.data()
+        ops_orig, zcorr = registration.zalign.compute_zpos(stack, ops)
+        np.save(ops['ops_path'], ops_orig)
+        reader.close()
+        #registration.zalign
+    #%%
 # =============================================================================
 #     plane_times = {}
 #     ######### REGISTRATION #########

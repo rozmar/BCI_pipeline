@@ -243,6 +243,12 @@ def concatenate_suite2p_files(target_movie_directory):
         filelist_dict = {'file_name_list' : [],
                          'frame_num_list' :[],
                          'file_added_time':[],
+                         'xoff_mean_list':[],
+                         'yoff_mean_list':[],
+                         'xoff_std_list':[],
+                         'yoff_std_list':[],
+                         'zoff_mean_list':[],
+                         'zoff_std_list':[],
                          'concatenation_underway':True}
     file_dict = np.load(os.path.join(target_movie_directory,'copy_data.npy'),allow_pickle = True).tolist()
     for file_idx,file in enumerate(file_dict['copied_files']):
@@ -273,6 +279,10 @@ def concatenate_suite2p_files(target_movie_directory):
         if file in filelist_dict['file_name_list']: # skip files that are already added
             continue
         ops = np.load(os.path.join(dir_now,'suite2p','plane0','ops.npy'),allow_pickle = True).tolist()
+        try:
+            ops['zcorr']=ops['zcorr'].T
+        except:
+            pass
         sourcefile = os.path.join(dir_now,'suite2p','plane0','data.bin')
         #%
         if file_idx == 0: #the first one is copied
@@ -282,6 +292,16 @@ def concatenate_suite2p_files(target_movie_directory):
             filelist_dict['frame_num_list'].append(ops['nframes'])
             filelist_dict['file_added_time'].append(str(datetime.datetime.now()))
             filelist_dict['concatenation_underway'] = True
+            filelist_dict['xoff_mean_list'] = [np.mean(ops['xoff'])]
+            filelist_dict['yoff_mean_list'] = [np.mean(ops['yoff'])]
+            filelist_dict['xoff_std_list'] = [np.std(ops['xoff'])]
+            filelist_dict['yoff_std_list'] = [np.std(ops['yoff'])]#'zcorr'
+            try:
+                zcorr = np.argmax(ops['zcorr'],1)
+                filelist_dict['zoff_mean_list'] = [np.mean(zcorr)]
+                filelist_dict['zoff_std_list'] = [np.std(zcorr)]#''
+            except:
+                pass # no zcorr
             meanimg_list = np.asarray([ops['meanImg']])
             np.save(meanimg_file,meanimg_list)
         else:
@@ -339,6 +359,18 @@ def concatenate_suite2p_files(target_movie_directory):
             filelist_dict['frame_num_list'].append(ops['nframes'])
             filelist_dict['file_added_time'].append(str(datetime.datetime.now()))
             filelist_dict['concatenation_underway'] = True
+            filelist_dict['xoff_mean_list'].append(np.mean(ops['xoff']))
+            filelist_dict['yoff_mean_list'].append(np.mean(ops['yoff']))
+            filelist_dict['xoff_std_list'].append(np.std(ops['xoff']))
+            filelist_dict['yoff_std_list'].append(np.std(ops['yoff']))
+            
+            try:
+                zcorr = np.argmax(ops['zcorr'],1)
+                filelist_dict['zoff_mean_list'].append(np.mean(zcorr))
+                filelist_dict['zoff_std_list'].append(np.std(zcorr))
+            except:
+                pass # no zcorr
+            
             with open(concatenated_movie_filelist_json, "w") as data_file:
                 json.dump(filelist_dict, data_file, indent=2)
             #np.save(concatenated_movie_ops,ops_concatenated)        
