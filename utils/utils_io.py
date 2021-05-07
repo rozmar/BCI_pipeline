@@ -185,8 +185,11 @@ def copy_tiff_files_in_order(source_movie_directory,target_movie_directory):
     basenames = basenames[order]
     file_indices = file_indices[order]
     uniquebasenames = np.unique(basenames)
+    stacknames = list()
     for basename in uniquebasenames:
         if 'stack' in basename:
+            stacks = basenames == basename
+            stacknames.extend(fnames[stacks])
             needed = basenames != basename
             basenames = basenames[needed]
             fnames = fnames[needed]
@@ -208,7 +211,20 @@ def copy_tiff_files_in_order(source_movie_directory,target_movie_directory):
         file_dict = np.load(os.path.join(target_movie_directory,'copy_data.npy'),allow_pickle = True).tolist()
     except:
         file_dict = {'copied_files':list()}
-        
+    if 'copied_stacks' not in file_dict.keys():
+        file_dict['copied_stacks'] = list()
+    
+    for stackname in stacknames:
+        if stackname not in file_dict['copied_stacks']:
+            target_dir = os.path.join(target_movie_directory,stackname[:-4])
+            Path(target_dir).mkdir(parents = True,exist_ok = True)
+            sourcefile = os.path.join(source_movie_directory,stackname)
+            destfile = os.path.join(os.path.join(target_movie_directory,stackname[:-4]),stackname)
+            shutil.copyfile(sourcefile,destfile+'_tmp')
+            os.rename(destfile+'_tmp',destfile)
+            file_dict['copied_stacks'].append(stackname)
+            np.save(os.path.join(target_movie_directory,'copy_data.npy'),file_dict)
+            
     for fname in fnames:
         if fname not in file_dict['copied_files']:#dirs_in_target_dir: 
             try:
