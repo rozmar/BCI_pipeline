@@ -418,8 +418,32 @@ def registration_metrics(full_movie_dir):
     #print('Registration metrics, %0.2f sec.' % time.time()-t0)
     np.save(os.path.join(ops['save_path'], 'ops.npy'), ops)
     
-def export_dff(suite2p_dir):
+def export_dff(suite2p_dir,raw_imaging_dir=None,revert_background_subtraction = False):
+    #%%
     
+    if revert_background_subtraction:
+        with open(os.path.join(suite2p_dir,'filelist.json')) as f:
+            filelist_dict = json.load(f)
+        background_to_subtract = []
+        basename_prev = ''
+        for file_name,frame_num in zip(filelist_dict['file_name_list'],filelist_dict['frame_num_list']):
+            basename = file_name[:-1*file_name[::-1].find('_')-1]
+            if basename != basename_prev:
+                metadata = extract_scanimage_metadata(os.path.join(raw_imaging_dir,file_name))
+                offsets = np.asarray(metadata['metadata']['hScan2D']['channelOffsets'].strip('[]').split(' '),int)
+                subtract_offset = np.asarray(metadata['metadata']['hScan2D']['channelsSubtractOffsets'].strip('[]').split(' '))=='true'
+                if  not subtract_offset[0]:
+                    offset_value = np.nan
+                else:
+                    offset_value = offsets[0]
+                basename_prev = basename
+                #print(file_name)  
+            background_to_subtract.append(np.ones(frame_num)*offset_value)
+        background_to_subtract = np.concatenate(background_to_subtract)
+           # break
+        
+    
+    #%%
 
     #%
 # =============================================================================
@@ -428,8 +452,8 @@ def export_dff(suite2p_dir):
 #     suite2p_dir = '/home/rozmar/Data/Calcium_imaging/suite2p/KayvonScope/BCI_07/042121'
 # =============================================================================
     
-    F = np.load(os.path.join(suite2p_dir,'F.npy'))
-    Fneu = np.load(os.path.join(suite2p_dir,'Fneu.npy'))
+    F = np.load(os.path.join(suite2p_dir,'F.npy'))+background_to_subtract -np.min(background_to_subtract)
+    Fneu = np.load(os.path.join(suite2p_dir,'Fneu.npy')) + background_to_subtract -np.min(background_to_subtract)
     #iscell = np.load(os.path.join(suite2p_dir,'iscell.npy'))
     ops = np.load(os.path.join(suite2p_dir,'ops.npy'),allow_pickle = True).tolist()
     fs = ops['fs']
@@ -445,8 +469,10 @@ def export_dff(suite2p_dir):
     Flow = filters.minimum_filter1d(Flow,    win_baseline)
     Flow = filters.maximum_filter1d(Flow,    win_baseline)
     #%
+    dF = Fcorr-Flow
     dFF = (Fcorr-Flow)/Flow
     #Fcorr[noncell] = 0
     #%
     np.save(os.path.join(suite2p_dir,'Fcorr.npy'),Fcorr )
     np.save(os.path.join(suite2p_dir,'dFF.npy'),dFF )
+    np.save(os.path.join(suite2p_dir,'dF.npy'),dF )
