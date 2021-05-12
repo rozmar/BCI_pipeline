@@ -339,7 +339,7 @@ def concatenate_suite2p_files(target_movie_directory):
                 #%
                 addlist = False
                 try:
-                    if ops[key]!=ops_concatenated[key] or key in ['xrange','yrange','nframes','frames_per_file','frames_per_folder','tPC']:
+                    if ops[key]!=ops_concatenated[key] or key in ['xrange','yrange','nframes','frames_per_file','frames_per_folder','tPC','fs','bidi_corrected']:
                         addlist = True
                         #print(key)
                 except:

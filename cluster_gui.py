@@ -47,7 +47,8 @@ class App(QDialog):
                          'BCI_06',
                          'BCI_07',
                          'BCI_08',
-                         'BCI_09']
+                         'BCI_09',
+                         'BCI_10']
         self.s2p_params = {'max_reg_shift':50, # microns
                               'max_reg_shift_NR': 20, # microns
                               'block_size': 200, # microns
@@ -219,8 +220,11 @@ class App(QDialog):
             return
         else:
             self.plotinprogress = True
-        with open(os.path.join(self.target_movie_directory,'s2p_params.json'), "r") as read_file:
-            s2p_params = json.load(read_file)
+        try:
+            with open(os.path.join(self.target_movie_directory,'s2p_params.json'), "r") as read_file:
+                s2p_params = json.load(read_file)
+        except:
+            return
         if self.handles['zstack_select'].currentText() != s2p_params['z_stack_name']:
             self.handles['zstack_set'].setStyleSheet("background-color : red")
         else:
@@ -283,8 +287,7 @@ class App(QDialog):
             if self.handles['concatenate_auto'].isChecked() and concatenationcolor == 'green':
                 self.concatenate_movies()
                 
-            if self.handles['motioncorr_auto'].isChecked():
-                self.do_motion_correction()
+            
             try:
                 self.update_progress_table()
             except:
@@ -295,6 +298,8 @@ class App(QDialog):
                 self.handles['progress_table'].setItem(0,2, QTableWidgetItem('no data'))
                 self.handles['progress_table'].setItem(0,3, QTableWidgetItem('no data'))
                 
+            if self.handles['motioncorr_auto'].isChecked():
+                self.do_motion_correction()   
             copyfile_json_file = os.path.join(self.target_movie_directory_base,'copyfile.json')
             with open(copyfile_json_file, "r") as read_file:
                 copyfile_params = json.load(read_file)
@@ -424,10 +429,13 @@ class App(QDialog):
         session = self.handles['session_select'].currentText()
         self.handles['session'].setText(session)
         self.target_movie_directory = os.path.join(self.target_movie_directory_base,setup,subject,session)
-        with open(os.path.join(self.target_movie_directory,'s2p_params.json'), "r") as read_file:
-            s2p_params = json.load(read_file)
-        self.s2p_params = s2p_params
-        self.autoupdateprogress()
+        print(self.target_movie_directory )
+# =============================================================================
+#         with open(os.path.join(self.target_movie_directory,'s2p_params.json'), "r") as read_file:
+#             s2p_params = json.load(read_file)
+#         self.s2p_params = s2p_params
+# =============================================================================
+        #self.autoupdateprogress()
     
     def update_exp_details(self):
         setup = self.handles['setup_select'].currentText()
@@ -535,6 +543,9 @@ class App(QDialog):
             if reg_dict['registration_started']:
                 continue
             print('starting {}'.format(file))
+            reg_dict['registration_started'] = True
+            with open(reg_json_file, "w") as data_file:
+                json.dump(reg_dict, data_file, indent=2)
             #%
             cluster_command_list = ['eval "$(conda shell.bash hook)"',
                                     'conda activate suite2p',

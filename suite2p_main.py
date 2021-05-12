@@ -32,9 +32,11 @@ target_movie_directory_base = '/groups/svoboda/home/rozsam/Data/BCI_data/'
 # session = '121420'
 # =============================================================================
 
-setup = 'DOM3-MMIMS'
-subject = 'BCI_07'
-session = '2021-02-17'
+# =============================================================================
+# setup = 'DOM3-MMIMS'
+# subject = 'BCI_07'
+# session = '2021-02-17'
+# =============================================================================
 
 
 # =============================================================================
@@ -44,11 +46,9 @@ session = '2021-02-17'
 # =============================================================================
 
 
-# =============================================================================
-# setup = 'KayvonScope'
-# subject = 'BCI_07'
-# session = '042121'
-# =============================================================================
+setup = 'KayvonScope'
+subject = 'BCI_03'
+session = '050321'
 
 s2p_params = {'max_reg_shift':50, # microns
               'max_reg_shift_NR': 20, # microns
@@ -58,7 +58,7 @@ s2p_params = {'max_reg_shift':50, # microns
               'overwrite': False,
               'num_workers':4} # folder where the suite2p output is saved
 
-on_cluster = True
+on_cluster = False
 #% import libraries
 if on_cluster:
     

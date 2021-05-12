@@ -142,8 +142,10 @@ def register_trial(target_movie_directory,file):
     else:
         reg_dict = {'registration_started':False}
         
-    if reg_dict['registration_started']:
-        return
+# =============================================================================
+#     if reg_dict['registration_started']:
+#         return
+# =============================================================================
     reg_dict = {'registration_started':True,
                 'registration_started_time':str(time.time()),
                 'registration_finished':False}
@@ -163,7 +165,7 @@ def register_trial(target_movie_directory,file):
     ops = s2p_default_ops()#run_s2p.default_ops()
 
     ops['reg_tif'] = False # save registered movie as tif files
-    ops['num_workers'] = s2p_params['num_workers']
+    #ops['num_workers'] = s2p_params['num_workers']
     ops['delete_bin'] = 0 
     ops['keep_movie_raw'] = 0
     ops['save_path0'] = dir_now
@@ -194,66 +196,42 @@ def register_trial(target_movie_directory,file):
     ops['force_refImg'] = True
     print('regstering {}'.format(tiff_now))
     ops['do_regmetrics'] = False
-    #%%
+    #%
     ops = run_s2p(ops)
     
-    
-    if len(s2p_params['z_stack_name'])>0:
-        #%%
-        file = s2p_params['z_stack_name']
+    #%%
+    try:
         #%
-# =============================================================================
-#         target_movie_directory = '/groups/svoboda/home/rozsam/Data/BCI_data/DOM3-MMIMS/BCI_07/2021-02-25'
-#         file = 'zstack_motion_corr_00001.tif'
-# =============================================================================
+        file = s2p_params['z_stack_name']
+#%
         zstack_tiff = os.path.join(target_movie_directory,file[:-4],file)
         reader=ScanImageTiffReader(zstack_tiff)
         stack=reader.data()
-        ops_orig, zcorr = registration.zalign.compute_zpos(stack, ops)
+        if stack.shape[1]/ops['Lx'] == 2:
+            stack = stack[:,::2,::2]
+        elif stack.shape[1]/ops['Lx'] == 4:
+            stack = stack[:,::4,::4]
+        elif stack.shape[1]/ops['Lx'] == 8:
+            stack = stack[:,::8,::8]
+        #%
+        #ops_orig, zcorr = registration.zalign.compute_zpos(stack, ops)
+        ops_orig, zcorr = registration.zalign.compute_zpos_single_frame(stack, ops['meanImg'][np.newaxis,:,:], ops)
         np.save(ops['ops_path'], ops_orig)
-        reader.close()
-        #registration.zalign
-    #%%
-# =============================================================================
-#     plane_times = {}
-#     ######### REGISTRATION #########
-#     t11=time.time()
-#     print('----------- REGISTRATION')
-#     ops = registration.register_binary(ops,refImg) # register binary
-#     np.save(ops['ops_path'], ops)
-#     plane_times['registration'] = time.time()-t11
-#     print('----------- Total %0.2f sec' % plane_times['registration'])
-#     if ops['two_step_registration'] and ops['keep_movie_raw']:
-#         print('----------- REGISTRATION STEP 2')
-#         print('(making mean image (excluding bad frames)')
-#         refImg = registration.sampled_mean(ops)
-#         ops = registration.register_binary(ops, refImg, raw=False)
-#         np.save(ops['ops_path'], ops)
-#         plane_times['two_step_registration'] = time.time()-t11
-#         print('----------- Total %0.2f sec' % plane_times['two_step_registration'])
-# 
-#     # compute metrics for registration
-#     if ops.get('do_regmetrics', True) and ops['nframes']>=1500:
-#         t0 = time.time()
-#         ops = registration.get_pc_metrics(ops)
-#         plane_times['registration_metrics'] = time.time()-t0
-#         print('Registration metrics, %0.2f sec.' % plane_times['registration_metrics'])
-#         np.save(os.path.join(ops['save_path'], 'ops.npy'), ops)
-# =============================================================================
-        
-        
-        
-        
+        #%%
+        #reader.close()
+        #%
+    except:
+        pass # no z-stack
+  #%%
     with open(reg_json_file, "r") as read_file:
         reg_dict = json.load(read_file)
     reg_dict['registration_finished'] = True
     reg_dict['registration_finished_time'] = str(time.time())
     with open(reg_json_file, "w") as data_file:
         json.dump(reg_dict, data_file, indent=2)
-        
-        
+       #%% 
 def generate_mean_image_from_trials(target_movie_directory,trial_num_to_use):
-    #%
+    #%%
     with open(os.path.join(target_movie_directory,'s2p_params.json'), "r") as read_file:
         s2p_params = json.load(read_file)
     reference_movie_dir = os.path.join(target_movie_directory,'_reference_image')
@@ -273,7 +251,7 @@ def generate_mean_image_from_trials(target_movie_directory,trial_num_to_use):
     ops = s2p_default_ops()#run_s2p.default_ops()
     
     ops['reg_tif'] = False # save registered movie as tif files
-    ops['num_workers'] = s2p_params['num_workers']
+    #ops['num_workers'] = s2p_params['num_workers']
     ops['delete_bin'] = 0 
     ops['keep_movie_raw'] = 0
     ops['fs'] = float(metadata['frame_rate'])
@@ -347,7 +325,7 @@ def generate_mean_image_from_trials(target_movie_directory,trial_num_to_use):
     refimage_dict['ref_image_finished_time'] = str(time.time())
     with open(reference_movie_json, "w") as data_file:
         json.dump(refimage_dict, data_file, indent=2)
-    
+    #%%
 def find_ROIs(full_movie_dir):
     #%%
     ops_path = os.path.join(full_movie_dir,'ops.npy')
@@ -396,6 +374,10 @@ def find_ROIs(full_movie_dir):
     ops['xrange'] = [np.max(ops['xrange'][::2]),np.min(ops['xrange'][1::2])]
     ops['yrange'] = [np.max(ops['yrange'][::2]),np.min(ops['yrange'][1::2])]
     ops['save_mat']=1
+    if type(ops['fs']) == list:
+        ops['fs'] = ops['fs'][-1]
+    if type(ops['bidi_corrected']) == list:
+        ops['bidi_corrected'] = ops['bidi_corrected'][-1]
     #%% #np.save(os.path.join(full_movie_dir,'ops.npy'),ops)
     run_plane(ops)
     roifind_progress_dict['roifind_finished'] = True
@@ -436,6 +418,8 @@ def registration_metrics(full_movie_dir):
     t0 = time.time()
     ops = registration.get_pc_metrics(ops)
     #print('Registration metrics, %0.2f sec.' % time.time()-t0)
+    if 'fs_list' in ops.keys():
+        ops['fs'] = np.median(ops['fs_list'])
     np.save(os.path.join(ops['save_path'], 'ops.npy'), ops)
     
 def export_dff(suite2p_dir,raw_imaging_dir=None,revert_background_subtraction = False):
@@ -496,3 +480,5 @@ def export_dff(suite2p_dir,raw_imaging_dir=None,revert_background_subtraction = 
     np.save(os.path.join(suite2p_dir,'Fcorr.npy'),Fcorr )
     np.save(os.path.join(suite2p_dir,'dFF.npy'),dFF )
     np.save(os.path.join(suite2p_dir,'dF.npy'),dF )
+    
+    
