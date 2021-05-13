@@ -281,7 +281,42 @@ def export_pybpod_files_core(bpod_session_dict,calcium_imaging_raw_session_dir):
     behavior_dict['residual_tiff_files'] = residual_tiff_files
     #%%
     return behavior_dict
-
+# =============================================================================
+# #%%
+# import matplotlib.pyplot as plt
+# difi = list()
+# for lick_L,lick_R,trial_start in zip(behavior_dict['lick_L'],behavior_dict['lick_R'],behavior_dict['trial_start_times']):
+#     trial_time = trial_start.hour*3600+trial_start.minute*60 + trial_start.second
+#     #if len(lick_L) == len(lick_R):
+#         #difi.extend(lick_L-lick_R)
+#         #plt.plot(trial_time +lick_R, np.ones(len(lick_R)),'k|')
+#         
+#     plt.plot(trial_time +lick_R, np.ones(len(lick_R)),'k|')
+#     plt.plot(trial_time +lick_L, np.zeros(len(lick_L)),'k|')
+#     #break
+# =============================================================================
+#%%
+def export_single_pybpod_session(raw_behavior_dirs,subject_names,session): # TODO not finished yet!!
+    if not type(raw_behavior_dirs) == list():
+        raw_behavior_dirs = [raw_behavior_dirs]
+    if not type(subject_names) == list():
+        subject_names = [subject_names]
+    try:
+        session_date = datetime.datetime.strptime(session,'%m%d%y')
+    except:
+        try:
+            session_date = datetime.datetime.strptime(session,'%Y-%m-%d')
+        except:
+            print('cannot understand date for session dir: {}'.format(session))
+            #continue
+    
+    projects = list()
+    for projectdir in raw_behavior_dirs:
+        projects.append(Project())
+        projects[-1].load(projectdir)
+    
+    bpod_session_dict = find_pybpod_sessions(subject_names,session_date.strftime('%Y%m%d'),projects)
+    
 
 #%% this script will export behavior and pair it to imaging, then save it in a neat directory structure
 def export_pybpod_files(overwrite=False,behavior_export_basedir = '/home/rozmar/Data/Behavior/BCI_exported'):
@@ -326,12 +361,17 @@ def export_pybpod_files(overwrite=False,behavior_export_basedir = '/home/rozmar/
                     if not overwrite and os.path.exists(os.path.join(bpod_export_dir,bpod_export_file)):
                         print('session already exported: {}'.format(os.path.join(bpod_export_dir,bpod_export_file)))
                         continue
+                    
                     bpod_session_dict = find_pybpod_sessions([subject_wr_name,subject],session_date.strftime('%Y%m%d'),projects)
-                    #%
+                   
                     
                     
                     print('exporting behavior from {}/{}'.format(subject,session))
-                    behavior_dict = export_pybpod_files_core(bpod_session_dict,calcium_imaging_raw_session_dir) 
+                    try:
+                        behavior_dict = export_pybpod_files_core(bpod_session_dict,calcium_imaging_raw_session_dir) 
+                    except:
+                        print('COULD NOT EXPORT SESSION: {}'.format(os.path.join(bpod_export_dir,bpod_export_file)))
+                    
                     if type(behavior_dict) != dict:
                         print('skipping this one')
                         continue
