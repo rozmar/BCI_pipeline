@@ -12,7 +12,7 @@ except:
     session = datetime.date.today().strftime('%Y-%m-%d')
     
 if setup == 'dom3':
-    raw_behavior_dirs = []
+    raw_behavior_dirs = [] # TODO refer to the behavior PC
     target_movie_directory_base = r'Z:\users\rozmar\BCI_suite2p'
     calcium_imaging_raw_session_dir = os.path.join(r'D:\Marton\scanimage',subject_names[0],session)
     save_dir = os.path.join(target_movie_directory_base,subject_names[0],session,'_concatenated_movie')
