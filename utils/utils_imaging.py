@@ -360,7 +360,8 @@ def find_ROIs(full_movie_dir):
     
     
             #%
-    #ops['tau'] = .25
+    if 'BCI_10' in full_movie_dir: #GCaMP8s
+        ops['tau'] = .25
     ops['do_registration'] = 0
     ops['save_path'] = full_movie_dir
     ops['allow_overlap'] = False
@@ -376,7 +377,7 @@ def find_ROIs(full_movie_dir):
     ops['save_mat']=1
     if type(ops['fs']) == list:
         ops['fs'] = ops['fs'][-1]
-    if type(ops['bidi_corrected']) == list:
+    if type(ops['bidi_corrected']) == list or type(ops['bidi_corrected']) == np.ndarray:
         ops['bidi_corrected'] = ops['bidi_corrected'][-1]
     #%% #np.save(os.path.join(full_movie_dir,'ops.npy'),ops)
     run_plane(ops)
