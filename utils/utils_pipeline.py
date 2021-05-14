@@ -296,7 +296,7 @@ def export_pybpod_files_core(bpod_session_dict,calcium_imaging_raw_session_dir):
 #     #break
 # =============================================================================
 #%%
-def export_single_pybpod_session(raw_behavior_dirs,subject_names,session): # TODO not finished yet!!
+def export_single_pybpod_session(raw_behavior_dirs,subject_names,session,calcium_imaging_raw_session_dir,save_dir): # TODO not finished yet!!
     if not type(raw_behavior_dirs) == list():
         raw_behavior_dirs = [raw_behavior_dirs]
     if not type(subject_names) == list():
@@ -316,8 +316,17 @@ def export_single_pybpod_session(raw_behavior_dirs,subject_names,session): # TOD
         projects[-1].load(projectdir)
     
     bpod_session_dict = find_pybpod_sessions(subject_names,session_date.strftime('%Y%m%d'),projects)
+    behavior_dict = export_pybpod_files_core(bpod_session_dict,calcium_imaging_raw_session_dir) 
+    bpod_export_file = '{}-bpod_zaber.npy'.format(session)
+    np.save(os.path.join(save_dir,bpod_export_file),behavior_dict)
+    bpod_export_file = '{}-bpod_zaber.mat'.format(session)
+    behavior_dict_matlab = behavior_dict.copy()
+    behavior_dict_matlab['trial_start_times'] = np.asarray(behavior_dict['trial_start_times'],str)
+    behavior_dict_matlab['trial_end_times'] = np.asarray(behavior_dict['trial_end_times'],str)
+    #%
+    savemat(os.path.join(save_dir,bpod_export_file),behavior_dict_matlab)
     
-
+    
 #%% this script will export behavior and pair it to imaging, then save it in a neat directory structure
 def export_pybpod_files(overwrite=False,behavior_export_basedir = '/home/rozmar/Data/Behavior/BCI_exported'):
 #overwrite = False
