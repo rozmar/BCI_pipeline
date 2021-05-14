@@ -287,16 +287,18 @@ class App(QDialog):
             if self.handles['concatenate_auto'].isChecked() and concatenationcolor == 'green':
                 self.concatenate_movies()
                 
-            
-            try:
-                self.update_progress_table()
-            except:
-                print('could not plot')
-                self.handles['progress_table'].setRowCount(1)
-                self.handles['progress_table'].setItem(0,0, QTableWidgetItem('no data'))
-                self.handles['progress_table'].setItem(0,1, QTableWidgetItem('no data'))
-                self.handles['progress_table'].setItem(0,2, QTableWidgetItem('no data'))
-                self.handles['progress_table'].setItem(0,3, QTableWidgetItem('no data'))
+            self.update_progress_table()
+# =============================================================================
+#             try:
+#                 self.update_progress_table()
+#             except:
+#                 print('could not plot')
+#                 self.handles['progress_table'].setRowCount(1)
+#                 self.handles['progress_table'].setItem(0,0, QTableWidgetItem('no data'))
+#                 self.handles['progress_table'].setItem(0,1, QTableWidgetItem('no data'))
+#                 self.handles['progress_table'].setItem(0,2, QTableWidgetItem('no data'))
+#                 self.handles['progress_table'].setItem(0,3, QTableWidgetItem('no data'))
+# =============================================================================
                 
             if self.handles['motioncorr_auto'].isChecked():
                 self.do_motion_correction()   

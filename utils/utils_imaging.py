@@ -438,7 +438,7 @@ def export_dff(suite2p_dir,raw_imaging_dir=None,revert_background_subtraction = 
                 offsets = np.asarray(metadata['metadata']['hScan2D']['channelOffsets'].strip('[]').split(' '),int)
                 subtract_offset = np.asarray(metadata['metadata']['hScan2D']['channelsSubtractOffsets'].strip('[]').split(' '))=='true'
                 if  not subtract_offset[0]:
-                    offset_value = np.nan
+                    offset_value = 0
                 else:
                     offset_value = offsets[0]
                 basename_prev = basename

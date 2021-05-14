@@ -6,7 +6,7 @@ import sys
 print(sys.argv)
 argument = sys.argv[1]
 if argument == 'rozmar_workstation':
-    target_movie_directory_base = '/home/rozmar/Network/dm11/svoboda$/rozsam/Data/BCI_data'
+    target_movie_directory_base = '/home/rozmar/Network/dm11/svobodalab/users/rozmar/BCI_suite2p'#'/home/rozmar/Network/dm11/svoboda$/rozsam/Data/BCI_data'
     #target_movie_directory_base = '/home/rozmar/Data/temp/suite2p/'
     source_movie_directory_base = '/home/rozmar/Data/Calcium_imaging/raw'
     while True:
