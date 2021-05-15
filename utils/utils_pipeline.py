@@ -297,10 +297,12 @@ def export_pybpod_files_core(bpod_session_dict,calcium_imaging_raw_session_dir):
 # =============================================================================
 #%%
 def export_single_pybpod_session(raw_behavior_dirs,subject_names,session,calcium_imaging_raw_session_dir,save_dir): # TODO not finished yet!!
-    if not type(raw_behavior_dirs) == list():
-        raw_behavior_dirs = [raw_behavior_dirs]
-    if not type(subject_names) == list():
-        subject_names = [subject_names]
+# =============================================================================
+#     if not type(raw_behavior_dirs) == list():
+#         raw_behavior_dirs = [raw_behavior_dirs]
+#     if not type(subject_names) == list():
+#         subject_names = [subject_names]
+# =============================================================================
     try:
         session_date = datetime.datetime.strptime(session,'%m%d%y')
     except:

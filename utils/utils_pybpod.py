@@ -265,8 +265,12 @@ def generate_zaber_info_for_pybpod_dict(behavior_dict,subject_name,setup_name,za
         setup_dirname = 'DOM3-MMIMS'
     else:
         setup_dirname = setup_name
-    zaberdir = os.path.join(zaber_folder_root,setup_dirname,'subjects',subject_name)
-    zaberfiles = np.sort(os.listdir(zaberdir))[::-1]
+    try:
+        zaberdir = os.path.join(zaber_folder_root,setup_dirname,'subjects',subject_name)
+        zaberfiles = np.sort(os.listdir(zaberdir))[::-1]
+    except:
+        zaberdir = os.path.join(r'W:\Users\labadmin\Documents\BCI_Zaber_data','subjects',subject_name)
+        zaberfiles = np.sort(os.listdir(zaberdir))[::-1]
     zabertimes = list()
     for zaberfile in zaberfiles:
         zabertime = datetime.strptime(zaberfile[:-5],'%Y-%m-%d_%H-%M-%S')
