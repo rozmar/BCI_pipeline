@@ -3,9 +3,12 @@ import numpy as np
 import datetime
 import matplotlib.pyplot as plt
 import scipy.ndimage as ndimage
-import datajoint as dj
-from pipeline import pipeline_tools,lab,experiment
-from pipeline.ingest import datapipeline_metadata
+try:
+    import datajoint as dj
+    from pipeline import pipeline_tools,lab,experiment
+    from pipeline.ingest import datapipeline_metadata
+except:
+    print('could not import datajoint')
 from matplotlib import cm
 
 import matplotlib

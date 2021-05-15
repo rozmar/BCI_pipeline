@@ -457,8 +457,11 @@ def export_dff(suite2p_dir,raw_imaging_dir=None,revert_background_subtraction = 
 #     suite2p_dir = '/home/rozmar/Data/Calcium_imaging/suite2p/KayvonScope/BCI_07/042121'
 # =============================================================================
     
-    F = np.load(os.path.join(suite2p_dir,'F.npy'))+background_to_subtract -np.min(background_to_subtract)
-    Fneu = np.load(os.path.join(suite2p_dir,'Fneu.npy')) + background_to_subtract -np.min(background_to_subtract)
+        F = np.load(os.path.join(suite2p_dir,'F.npy'))+background_to_subtract -np.min(background_to_subtract)
+        Fneu = np.load(os.path.join(suite2p_dir,'Fneu.npy')) + background_to_subtract -np.min(background_to_subtract)
+    else:
+        F = np.load(os.path.join(suite2p_dir,'F.npy'))
+        Fneu = np.load(os.path.join(suite2p_dir,'Fneu.npy'))
     #iscell = np.load(os.path.join(suite2p_dir,'iscell.npy'))
     ops = np.load(os.path.join(suite2p_dir,'ops.npy'),allow_pickle = True).tolist()
     fs = ops['fs']
