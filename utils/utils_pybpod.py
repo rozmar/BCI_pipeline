@@ -154,6 +154,8 @@ def minethedata(data,extract_variables = False):
                  'trial_end_times':list(),
                  'lick_L':list(),
                  'lick_R':list(),
+                 'lick_L_end':list(),
+                 'lick_R_end':list(),
                  'reward_L':list(),
                  'reward_R':list(),
                  'autowater_L':list(),
@@ -186,6 +188,8 @@ def minethedata(data,extract_variables = False):
             
         lick_left_times = df_trial.loc[data['var:WaterPort_L_ch_in'] == data['+INFO'],'BPOD-INITIAL-TIME'].values
         lick_right_times = df_trial.loc[data['var:WaterPort_R_ch_in'] == data['+INFO'],'BPOD-INITIAL-TIME'].values
+        lick_left_times_end = df_trial.loc[data['var:WaterPort_L_ch_out'] == data['+INFO'],'BPOD-INITIAL-TIME'].values
+        lick_right_times_end = df_trial.loc[data['var:WaterPort_R_ch_out'] == data['+INFO'],'BPOD-INITIAL-TIME'].values
         reward_left_times = df_trial.loc[(data['MSG'] == 'Reward_L') & (data['TYPE'] == 'TRANSITION'),'BPOD-INITIAL-TIME'].values
         reward_right_times = df_trial.loc[(data['MSG'] == 'Reward_R') & (data['TYPE'] == 'TRANSITION'),'BPOD-INITIAL-TIME'].values
         autowater_left_times = df_trial.loc[(data['MSG'] == 'Auto_Water_L') & (data['TYPE'] == 'TRANSITION'),'BPOD-INITIAL-TIME'].values
@@ -232,6 +236,8 @@ def minethedata(data,extract_variables = False):
         data_dict['trial_end_times'].append(trial_end_time)
         data_dict['lick_L'].append(lick_left_times)
         data_dict['lick_R'].append(lick_right_times)
+        data_dict['lick_L_end'].append(lick_left_times_end)
+        data_dict['lick_R_end'].append(lick_right_times_end)
         data_dict['reward_L'].append(reward_left_times)
         data_dict['reward_R'].append(reward_right_times)
         data_dict['autowater_L'].append(autowater_left_times)
