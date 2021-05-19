@@ -22,7 +22,7 @@ import tifffile
 #%% read digested behavior data and fluorescence traces, align, find cell candidates
 setup = 'DOM3-MMIMS'
 subject = 'BCI_10'
-session = '2021-05-13'
+session = '2021-05-19'
 
 
 
