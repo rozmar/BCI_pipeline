@@ -164,7 +164,9 @@ def minethedata(data,extract_variables = False):
                  'trial_hit':list(),
                  'time_to_hit':list(),
                  'trial_num':list(),
-                 'threshold_crossing_times':list()                 
+                 'threshold_crossing_times':list(),    
+                 'behavior_movie_name_list':list(),
+                 'scanimage_message_list':list()
                  }
     if extract_variables:
         for key_now in data.keys():
@@ -177,6 +179,18 @@ def minethedata(data,extract_variables = False):
             df_past_trial = data[trial_end_idx:trial_start_idxs[trial_num+1]]
         except:
             df_past_trial = data[trial_end_idx:]
+            #%
+        behavior_movie_names = 'no behavior video'
+        scanimage_message = 'no scanimage message'
+        for past_trial_line in  df_past_trial.iterrows():
+            past_trial_line = past_trial_line[1]
+            if 'Movie names for trial:' in past_trial_line['MSG']:
+                behavior_movie_names = past_trial_line['MSG'][23:].strip('[]').split(',')
+            if 'scanimage file' in past_trial_line['MSG']:
+                scanimage_message = past_trial_line['MSG'][16:]
+            
+            
+        #%
         #TODO df_past_trial contains the scanimage file name and the camera file names
         trial_start_time = data['PC-TIME'][trial_start_idx]
         trial_end_time = data['PC-TIME'][trial_end_idx]
@@ -244,7 +258,8 @@ def minethedata(data,extract_variables = False):
         data_dict['autowater_R'].append(autowater_right_times)
         data_dict['zaber_move_forward'].append(zaber_motor_movement_times)
         data_dict['threshold_crossing_times'].append(threshold_crossing_time)
-        
+        data_dict['behavior_movie_name_list'].append(behavior_movie_names)
+        data_dict['scanimage_message_list'].append(scanimage_message)
         if extract_variables:
             for key_now in data.keys():
                 if 'var:'in key_now:
