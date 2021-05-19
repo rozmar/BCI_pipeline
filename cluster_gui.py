@@ -215,6 +215,7 @@ class App(QDialog):
         
     @pyqtSlot()
     def autoupdateprogress(self):
+        #elf.plotinprogress = False
         if self.plotinprogress:
             print('not ready')
             return
@@ -571,14 +572,18 @@ class App(QDialog):
             pass # concatenation json file is not present
         Path(concatenated_movie_dir).mkdir(parents = True,exist_ok = True)
         os.chmod(concatenated_movie_dir, 0o777 )
-        #utils_io.concatenate_suite2p_files(target_movie_directory)
-        cluster_command_list = ['eval "$(conda shell.bash hook)"',
-                                'conda activate suite2p',
-                                'cd ~/Scripts/Python/BCI_pipeline/',
-                                "python cluster_helper.py {} '\"{}\"'".format('utils_io.concatenate_suite2p_files',self.target_movie_directory)]
-        cluster_output_file = os.path.join(os.path.join(self.target_movie_directory,'_concatenated_movie'),'s2p_concatenation_output.txt')
-        bash_command = r"bsub -n 1 -J BCI_concatenate_files '{} > {}'".format(' && '.join(cluster_command_list),cluster_output_file)
-        os.system(bash_command)
+# =============================================================================
+#         #utils_io.concatenate_suite2p_files(target_movie_directory)
+#         cluster_command_list = ['eval "$(conda shell.bash hook)"',
+#                                 'conda activate suite2p',
+#                                 'cd ~/Scripts/Python/BCI_pipeline/',
+#                                 "python cluster_helper.py {} '\"{}\"'".format('utils_io.concatenate_suite2p_files',self.target_movie_directory)]
+#         cluster_output_file = os.path.join(os.path.join(self.target_movie_directory,'_concatenated_movie'),'s2p_concatenation_output.txt')
+#         bash_command = r"bsub -n 1 -J BCI_concatenate_files '{} > {}'".format(' && '.join(cluster_command_list),cluster_output_file)
+#         os.system(bash_command)
+# =============================================================================
+        
+        os.system("python cluster_helper.py {} '{}' &".format('utils_io.concatenate_suite2p_files',self.target_movie_directory))
         
         
         print('concatenating')
