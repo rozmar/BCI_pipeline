@@ -154,6 +154,8 @@ def minethedata(data,extract_variables = False):
                  'trial_end_times':list(),
                  'lick_L':list(),
                  'lick_R':list(),
+                 'lick_L_end':list(),
+                 'lick_R_end':list(),
                  'reward_L':list(),
                  'reward_R':list(),
                  'autowater_L':list(),
@@ -162,7 +164,9 @@ def minethedata(data,extract_variables = False):
                  'trial_hit':list(),
                  'time_to_hit':list(),
                  'trial_num':list(),
-                 'threshold_crossing_times':list()                 
+                 'threshold_crossing_times':list(),    
+                 'behavior_movie_name_list':list(),
+                 'scanimage_message_list':list()
                  }
     if extract_variables:
         for key_now in data.keys():
@@ -175,6 +179,18 @@ def minethedata(data,extract_variables = False):
             df_past_trial = data[trial_end_idx:trial_start_idxs[trial_num+1]]
         except:
             df_past_trial = data[trial_end_idx:]
+            #%
+        behavior_movie_names = 'no behavior video'
+        scanimage_message = 'no scanimage message'
+        for past_trial_line in  df_past_trial.iterrows():
+            past_trial_line = past_trial_line[1]
+            if 'Movie names for trial:' in past_trial_line['MSG']:
+                behavior_movie_names = past_trial_line['MSG'][23:].strip('[]').split(',')
+            if 'scanimage file' in past_trial_line['MSG']:
+                scanimage_message = past_trial_line['MSG'][16:]
+            
+            
+        #%
         #TODO df_past_trial contains the scanimage file name and the camera file names
         trial_start_time = data['PC-TIME'][trial_start_idx]
         trial_end_time = data['PC-TIME'][trial_end_idx]
@@ -186,6 +202,8 @@ def minethedata(data,extract_variables = False):
             
         lick_left_times = df_trial.loc[data['var:WaterPort_L_ch_in'] == data['+INFO'],'BPOD-INITIAL-TIME'].values
         lick_right_times = df_trial.loc[data['var:WaterPort_R_ch_in'] == data['+INFO'],'BPOD-INITIAL-TIME'].values
+        lick_left_times_end = df_trial.loc[data['var:WaterPort_L_ch_out'] == data['+INFO'],'BPOD-INITIAL-TIME'].values
+        lick_right_times_end = df_trial.loc[data['var:WaterPort_R_ch_out'] == data['+INFO'],'BPOD-INITIAL-TIME'].values
         reward_left_times = df_trial.loc[(data['MSG'] == 'Reward_L') & (data['TYPE'] == 'TRANSITION'),'BPOD-INITIAL-TIME'].values
         reward_right_times = df_trial.loc[(data['MSG'] == 'Reward_R') & (data['TYPE'] == 'TRANSITION'),'BPOD-INITIAL-TIME'].values
         autowater_left_times = df_trial.loc[(data['MSG'] == 'Auto_Water_L') & (data['TYPE'] == 'TRANSITION'),'BPOD-INITIAL-TIME'].values
@@ -232,13 +250,16 @@ def minethedata(data,extract_variables = False):
         data_dict['trial_end_times'].append(trial_end_time)
         data_dict['lick_L'].append(lick_left_times)
         data_dict['lick_R'].append(lick_right_times)
+        data_dict['lick_L_end'].append(lick_left_times_end)
+        data_dict['lick_R_end'].append(lick_right_times_end)
         data_dict['reward_L'].append(reward_left_times)
         data_dict['reward_R'].append(reward_right_times)
         data_dict['autowater_L'].append(autowater_left_times)
         data_dict['autowater_R'].append(autowater_right_times)
         data_dict['zaber_move_forward'].append(zaber_motor_movement_times)
         data_dict['threshold_crossing_times'].append(threshold_crossing_time)
-        
+        data_dict['behavior_movie_name_list'].append(behavior_movie_names)
+        data_dict['scanimage_message_list'].append(scanimage_message)
         if extract_variables:
             for key_now in data.keys():
                 if 'var:'in key_now:
@@ -265,8 +286,12 @@ def generate_zaber_info_for_pybpod_dict(behavior_dict,subject_name,setup_name,za
         setup_dirname = 'DOM3-MMIMS'
     else:
         setup_dirname = setup_name
-    zaberdir = os.path.join(zaber_folder_root,setup_dirname,'subjects',subject_name)
-    zaberfiles = np.sort(os.listdir(zaberdir))[::-1]
+    try:
+        zaberdir = os.path.join(zaber_folder_root,setup_dirname,'subjects',subject_name)
+        zaberfiles = np.sort(os.listdir(zaberdir))[::-1]
+    except:
+        zaberdir = os.path.join(r'W:\Users\labadmin\Documents\BCI_Zaber_data','subjects',subject_name)
+        zaberfiles = np.sort(os.listdir(zaberdir))[::-1]
     zabertimes = list()
     for zaberfile in zaberfiles:
         zabertime = datetime.strptime(zaberfile[:-5],'%Y-%m-%d_%H-%M-%S')

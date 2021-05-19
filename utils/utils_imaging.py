@@ -6,9 +6,11 @@ import os
 import time
 from os import path
 from scipy.ndimage import filters
-
-from suite2p import default_ops as s2p_default_ops
-from suite2p import run_s2p, io,registration, run_plane
+try:
+    from suite2p import default_ops as s2p_default_ops
+    from suite2p import run_s2p, io,registration, run_plane
+except:
+    print('could not import s2p')
 #%%
 def extract_scanimage_metadata(file): # this function is also in utils_io
     #%

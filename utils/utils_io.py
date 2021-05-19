@@ -196,10 +196,18 @@ def copy_tiff_files_in_order(source_movie_directory,target_movie_directory):
             file_indices = file_indices[needed]
     uniquebasenames = np.unique(basenames)
     start_times = list()
-    for basename in uniquebasenames:
+    tokeep = np.ones(len(uniquebasenames))
+    for i,basename in enumerate(uniquebasenames):
         fname = fnames[np.where(basename==basenames)[0][0]]
-        metadata = extract_scanimage_metadata(os.path.join(files_dict['dir'],fname))
-        start_times.append(metadata['movie_start_time'])
+        try:
+            metadata = extract_scanimage_metadata(os.path.join(files_dict['dir'],fname))
+            start_times.append(metadata['movie_start_time'])
+        except:
+            print('error in {}'.format(basename))
+            start_times.append(np.nan)
+            tokeep[i]=0
+    start_times = np.asarray(start_times)[tokeep==1]
+    uniquebasenames = np.asarray(uniquebasenames)[tokeep==1]    
     order = np.argsort(start_times)  
     fnames_new = list()
     for idx in order:
