@@ -61,8 +61,19 @@ def populate_behavior():
         for session_num,(setup,session_date,filename,dir_name) in enumerate(zip(session_dict[subject]['setup'], session_dict[subject]['date'], session_dict[subject]['filename'], session_dict[subject]['dir_name'])):
             print(dir_name)
             behavfile = os.path.join(behavior_export_basedir,setup,subject,filename)
-            raw_imaging_dir = os.path.join(dj.config['locations.imagingdata_raw'],setup,subject,dir_name)
-            raw_imaging_files = os.listdir(raw_imaging_dir)
+            try:
+                raw_imaging_dir = os.path.join(dj.config['locations.imagingdata_raw'],setup,subject,dir_name)
+                raw_imaging_files = os.listdir(raw_imaging_dir)
+            except:
+                print('using different raw imaging dir for {}'.format([setup,subject,dir_name]))
+                for raw_base in dj.config['locations.imagingdata_raw_alternatives']:
+                    try:
+                        raw_imaging_dir = os.path.join(raw_base,setup,subject,dir_name)
+                        raw_imaging_files = os.listdir(raw_imaging_dir)
+                        print('using different raw imaging dir - found')
+                        break
+                    except:
+                        pass
             bpoddata = np.load(behavfile,allow_pickle = True).tolist()
             try:
                 user = bpoddata['experimenter_name'][0]
@@ -86,9 +97,11 @@ def populate_behavior():
             if len(experiment.Session()&'subject_id = {}'.format(subject_id)&'session_date = "{}"'.format(session_date.date()))>0:
                 print('already uploaded')
                 continue
+            #%
             trial_key_list = list()
             behaviortrial_key_list = list()
             bci_key_list = list()
+            conditioned_neuron_key_list = list()
             lickport_key_list = list()
             lickport_duration_key_list = list()
             trial_event_list = list()
@@ -140,16 +153,56 @@ def populate_behavior():
                         task = 'BCI CL'
                         task_protocol = 10
                         
-                        threshold_mat = loadmat(os.path.join(raw_imaging_dir,thresholdfilename))
+                        threshold_mat = loadmat(os.path.join(raw_imaging_dir,thresholdfilename)) #TODO alternative raw_imaging_dirs needed (now the data is fragmented)
+                        if 'basal_voltage' in threshold_mat.keys():
+                            if threshold_mat['basal_voltage'][0][0]>0:
+                                task_protocol = 11
+                        if 'vs' in thresholdfilename and len(np.where(np.concatenate(threshold_mat['selected_rois']))[0])==2:
+                            task_protocol = 12
+                            
                         bci_key = {'subject_id':subject_id,
                                    'session':session_num,
                                    'trial':trial_num,
-                                   'bci_conditioned_neuron_idx':threshold_mat['selected_rois'][0],
-                                   'bci_threshold_low':threshold_mat['BCI_threshold'][0][0],
-                                   'bci_threshold_high':threshold_mat['BCI_threshold'][0][1],
+                                   'bci_conditioned_neuron_ids':np.concatenate(threshold_mat['selected_rois']),
                                    'bci_minimum_voltage_out':0,
                                    'bci_movement_punishment_t':0,
                                    'bci_movement_punishment_pix':0,}
+                        
+                        for neuron_i, neuron_id in enumerate(np.where(np.concatenate(threshold_mat['selected_rois']))[0]): #TODO multiple neurons need to be added, VS, cell2 multiplier etc
+                            
+                            
+                                
+                            if task_protocol == 12 and neuron_i>0:  
+                                try:
+                                    t0 = threshold_mat['BCI_threshold_2'][0][0]
+                                    t1 = threshold_mat['BCI_threshold_2'][0][1]
+                                except:
+                                    t0 = threshold_mat['BCI_threshold'][0][0]
+                                    t1 = threshold_mat['BCI_threshold'][0][1]
+                                td = t1-t0
+                                try:
+                                    t1 = t0 + td/threshold_mat['cell2_multiplier'][0][0]
+                                except:
+                                    t1 = t0 + td
+                                conditioned_neuron_key = {'subject_id':subject_id,
+                                                          'session':session_num,
+                                                          'trial':trial_num,
+                                                          'bci_conditioned_neuron_idx':neuron_id,
+                                                          'bci_threshold_low':t0,
+                                                          'bci_threshold_high':t1,
+                                                          'bci_conditioned_neuron_sign':-1}
+                            else: # first neuron and every subsequent neurons gets positive sign if task protocol is not 12
+                                conditioned_neuron_key = {'subject_id':subject_id,
+                                                          'session':session_num,
+                                                          'trial':trial_num,
+                                                          'bci_conditioned_neuron_idx':neuron_id,
+                                                          'bci_threshold_low':threshold_mat['BCI_threshold'][0][0],
+                                                          'bci_threshold_high':threshold_mat['BCI_threshold'][0][1],
+                                                          'bci_conditioned_neuron_sign':1}
+                                
+                            conditioned_neuron_key_list.append(conditioned_neuron_key)
+                            #print([trial_num,neuron_id])
+                        #%
                         if len(threshold_mat.keys())>5: # marton added extra fields - this is not a hard criterion, might introduce bugs later
                             if 'enable_motion_punishment' not in threshold_mat.keys():
                                 threshold_mat['enable_motion_punishment'] = [[1]]
@@ -162,12 +215,12 @@ def populate_behavior():
                                 bci_key['bci_movement_punishment_pix'] = threshold_mat['max_pixel_movement'][0][0]
                             bci_key['bci_minimum_voltage_out'] = threshold_mat['minimum_voltage_out'][0][0]
                             
-                        if bci_key['bci_minimum_voltage_out']>0 and bci_key['bci_threshold_low']>5000: #this is a way for open loop configuration
+                        if bci_key['bci_minimum_voltage_out']>0 and conditioned_neuron_key_list[-1]['bci_threshold_low']>5000: #this is a way for open loop configuration
                             task = 'BCI OL'
                             task_protocol = 0
                         lickport_key['lickport_auto_step_freq'] += (bci_key['bci_minimum_voltage_out']/3.3)*bpoddata['zaber_max_speed'][trial_num]
                         bci_key_list.append(bci_key)  #we add this only if there is a scanimage file
-                
+                        
                 if len(bpoddata['reward_L'][trial_num])>0:
                     lickportchoice_key = {'subject_id':subject_id,
                                           'session':session_num,
@@ -288,6 +341,8 @@ def populate_behavior():
                 experiment.LickPortSetting().insert(lickport_key_list,allow_direct_insert=True)
                 experiment.LickPortSetting.OpenDuration().insert(lickport_duration_key_list,allow_direct_insert=True)
                 experiment.BCISettings().insert(bci_key_list,allow_direct_insert=True)
+                experiment.BCISettings.ConditionedNeuron().insert(conditioned_neuron_key_list,allow_direct_insert=True)
+                
                 experiment.ActionEvent().insert(action_event_list,allow_direct_insert=True)
                 experiment.TrialEvent().insert(trial_event_list,allow_direct_insert=True)
                 experiment.TrialLickportChoice().insert(trial_choice_list,allow_direct_insert=True)

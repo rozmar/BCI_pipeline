@@ -58,6 +58,7 @@ class TaskProtocol(dj.Lookup):
          ('BCI OL', 1, 'lickport moves in a random manner towards the mouse until it licks'),
          ('BCI CL', 10, 'lickport moves on ROI activity'),
          ('BCI CL', 11, 'lickport moves on ROI activity, but there is a baseline movement'),
+         ('BCI CL', 12, 'lickport moves on the difference of the activity of multiple ROIs, also there is a baseline movement'),
          ('BCI CL photostim', 20, 'lickport moves on ROI activity, the conditioned neuron is photostimulated'),         
          ]
 
@@ -205,13 +206,20 @@ class BCISettings(dj.Imported):
     definition = """  
     -> BehaviorTrial
     ----
-    bci_conditioned_neuron_idx   :   blob
-    bci_threshold_low            :   double 
-    bci_threshold_high           :   double
+    bci_conditioned_neuron_ids   :   blob
     bci_minimum_voltage_out      :   double
     bci_movement_punishment_t    :   double
     bci_movement_punishment_pix  :   double #
     """ 
+    class ConditionedNeuron(dj.Part):
+        definition = """
+        -> master
+        bci_conditioned_neuron_idx    :    smallint
+        ---
+        bci_conditioned_neuron_sign  :   double
+        bci_threshold_low            :   double 
+        bci_threshold_high           :   double
+        """
 @schema
 class LickPortSetting(dj.Imported):
     definition = """  

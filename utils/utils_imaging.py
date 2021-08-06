@@ -5,14 +5,66 @@ import datetime
 import os
 import time
 from os import path
+from pathlib import Path
 from scipy.ndimage import filters
+import tifffile
+import re
 try:
     from suite2p import default_ops as s2p_default_ops
     from suite2p import run_s2p, io,registration, run_plane
+    from suite2p.registration import rigid
 except:
     print('could not import s2p')
 #%%
+def exampledocstring():
+    """
+    My numpydoc description of a kind
+    of very exhautive numpydoc format docstring.
+    
+    Parameters
+    ----------
+    first : array_like
+        the 1st param name `first`
+    second :
+        the 2nd param
+    third : {'value', 'other'}, optional
+        the 3rd param, by default 'value'
+    
+    Returns
+    -------
+    string
+        a value in a string
+    
+    Raises
+    ------
+    KeyError
+        when a key error
+    OtherError
+        when an other error
+    
+    To do
+    -----
+    
+    """
+
 def extract_scanimage_metadata(file): # this function is also in utils_io
+    """
+    Exctracts scanimage metadata from tiff header.
+    
+    Parameters
+    ----------
+    file : string
+        full path to the tiff file
+
+    Returns
+    -------
+    dict
+        elaborate dict structure
+    
+    To do
+    ------
+    Multi-plane movies are not handled yet
+    """
     #%
     image = ScanImageTiffReader(file)
     metadata_raw = image.metadata()
@@ -130,6 +182,216 @@ def extract_scanimage_metadata(file): # this function is also in utils_io
            'movie_start_time': movie_start_time}
     #%%
     return out
+def offset_zstack_tiles(dir_now):
+    #%%
+    #dir_now = '/home/rozmar/Data/Calcium_imaging/suite2p/DOM3-MMIMS/BCI_10/anatomical_2021-06-08/'
+    #dir_now = '/home/rozmar/Data/Calcium_imaging/suite2p/DOM3-MMIMS/BCI_03/anatomical_2021-06-20/'
+    #dir_now = '/home/rozmar/Data/Calcium_imaging/suite2p/DOM3-MMIMS/BCI_15/anatomical_2021-07-16'
+    basedir_raw = '/home/rozmar/Data/Calcium_imaging/raw'
+    basedir_s2p = '/home/rozmar/Data/Calcium_imaging/suite2p'
+    
+    files = os.listdir(dir_now)
+    tiffiles = list()
+    for file in files:
+        if '.tif' in file:
+            tiffiles.append(file)
+    tiffiles = np.sort(tiffiles)
+    
+    if basedir_s2p in dir_now:
+        raw_tiff_source_dir =basedir_raw+ dir_now[len(basedir_s2p):]
+    else:
+        raw_tiff_source_dir  = dir_now
+    coordinates = list()
+    pixel_sizes = list()
+    z_coordinates = list()
+    pixel_nums = list()
+    for tiffile in tiffiles:
+        print(tiffile)
+        try:
+            metadata = extract_scanimage_metadata(os.path.join(raw_tiff_source_dir,tiffile))
+        except:
+            metadata = extract_scanimage_metadata(os.path.join(raw_tiff_source_dir,tiffile[:-1]))
+        coordinates.append(np.asarray(metadata['metadata']['hMotors']['motorPosition'].strip('[]').split(' '),float))
+        
+            #%
+        fovum = list()
+        for s in metadata['metadata']['hRoiManager']['imagingFovUm'].strip('[]').split(' '): fovum.extend(s.split(';'))
+        fovum = np.asarray(fovum,float)
+        fovum = [np.min(fovum),np.max(fovum)]
+        pixel_size = np.diff(fovum)[0]/int(metadata['metadata']['hRoiManager']['pixelsPerLine'])
+        pixel_sizes.append(pixel_size)
+        
+        z_coordinates.append(np.asarray(metadata['metadata']['hStackManager']['zs'].strip('[]').split(' '),float))
+        pixel_nums.append(int(metadata['metadata']['hRoiManager']['pixelsPerLine']))
+    #%
+    coordinates_real = np.asarray(coordinates)*[-1,-1,1]
+    uniquexcoords = np.unique(np.round(np.asarray(coordinates_real))[:,0])
+    uniqueycoords = np.unique(np.round(np.asarray(coordinates_real))[:,1])
+    FOV = pixel_sizes[0]*pixel_nums[0]
+    overlap_x_um = np.abs((np.mean(np.diff(uniquexcoords))-FOV)/2)
+    overlap_x_pix =  overlap_x_um/pixel_sizes[0]
+    overlap_y_um = np.abs((np.mean(np.diff(uniqueycoords))-FOV)/2)
+    overlap_y_pix =  overlap_y_um/pixel_sizes[0]
+    #%%
+    fig = plt.figure(figsize = [15,15])
+    ax = fig.add_subplot(111)
+    fig2 = plt.figure(figsize = [15,15])
+    spec2 = gridspec.GridSpec(ncols=len(uniquexcoords), nrows=len(uniqueycoords), figure=fig2)
+    
+    for coords,zcoords,pixelsize,pixelnum,tiffile in zip(coordinates_real,z_coordinates,pixel_sizes,pixel_nums,tiffiles):
+        half_image_size = pixelnum*pixelsize/2
+        x = coords[0]
+        y = coords[1]
+        ax.plot([x-half_image_size,x+half_image_size,x+half_image_size,x-half_image_size,x-half_image_size],
+                [y+half_image_size,y+half_image_size,y-half_image_size,y-half_image_size,y+half_image_size],'b--', alpha = .5)
+        ax.plot(x,y,'ro')
+        ax.text(x-100,y,tiffile[:-4])
+        
+        
+        xidx = len(uniqueycoords)-1-np.argmin(np.abs(uniqueycoords-coords[1]))
+        yidx =  np.argmin(np.abs(uniquexcoords-coords[0]))
+        
+        ax_now=fig2.add_subplot(spec2[xidx, yidx])
+        ax_now.set_title(tiffile)
+        tiff_now = tifffile.imread(os.path.join(dir_now,tiffile))
+        ax_now.imshow(tiff_now[5,:,:])
+        ax_now.axis('off')
+        if xidx>0:
+            ax_now.plot([0,pixel_nums[0]],[overlap_y_pix,overlap_y_pix],'w--',alpha = .2)
+        if yidx>0:
+            ax_now.plot([overlap_x_pix,overlap_x_pix],[0,pixel_nums[0]],'w--',alpha = .2)
+        if xidx<len(uniqueycoords)-1:
+            ax_now.plot([0,pixel_nums[0]],[pixel_nums[0]-overlap_y_pix,pixel_nums[0]-overlap_y_pix],'w--',alpha = .2)
+        if yidx<len(uniquexcoords)-1:
+            ax_now.plot([pixel_nums[0]-overlap_x_pix,pixel_nums[0]-overlap_x_pix],[0,pixel_nums[0]],'w--',alpha = .2)
+            
+        #break
+    
+    #%%
+    
+def restore_motion_corrected_zstacks(dir_now):
+    #%%
+
+    #dir_now = '/home/rozmar/Data/Calcium_imaging/suite2p/DOM3-MMIMS/BCI_10/anatomical_2021-06-08/'
+    #dir_now = '/home/rozmar/Data/Calcium_imaging/suite2p/DOM3-MMIMS/BCI_03/anatomical_2021-06-20/'
+    #dir_now = '/home/rozmar/Data/Calcium_imaging/suite2p/DOM3-MMIMS/BCI_15/anatomical_2021-07-16'
+    dir_now = '/home/rozmar/Data/Calcium_imaging/suite2p/DOM3-MMIMS/GABASnFR2/2021-07-20/ZStack_no_averaging'
+    zstack_names = os.listdir(dir_now)
+    for zstack_name in zstack_names:
+        planes = os.listdir(os.path.join(dir_now,zstack_name,'suite2p'))
+        plane_nums = list()
+        for plane in planes:
+            plane_nums.append(int(plane[5:]))
+        order = np.argsort(plane_nums)
+        meanimages = list()
+        for plane in np.asarray(planes)[order]:
+            ops = np.load(os.path.join(dir_now,zstack_name,'suite2p',plane,'ops.npy'),allow_pickle=True).tolist()
+            if len(meanimages)>0: # register to previous image
+                maskMul, maskOffset = rigid.compute_masks(refImg=meanimages[-1],
+                                                          maskSlope=1)
+                cfRefImg = rigid.phasecorr_reference(refImg=meanimages[-1],
+                                                     smooth_sigma=1,
+                                                     pad_fft=False)
+                ymax, xmax, cmax = rigid.phasecorr(data=np.complex64(np.float32(np.asarray([ops['meanImg']]*2)) * maskMul + maskOffset),
+                                                   cfRefImg=cfRefImg,
+                                                   maxregshift=50,
+                                                   smooth_sigma_time=0)
+                regimage = rigid.shift_frame(frame=ops['meanImg'], dy=ymax[0], dx=xmax[0])
+                
+                #print([xmax,ymax])
+            else:
+                regimage = ops['meanImg']
+                #break
+            meanimages.append(regimage)
+        #break
+        imgs = np.asarray(meanimages,dtype = np.int32)
+        tifffile.imsave(os.path.join(dir_now,zstack_name+'.tiff'),imgs)
+#%%
+def register_zstacks(dir_now):
+#%%
+    #dir_now = '/home/rozmar/Data/Calcium_imaging/raw/DOM3-MMIMS/BCI_03/anatomical_2021-06-20/'
+    #dir_now = '/home/rozmar/Data/Calcium_imaging/raw/DOM3-MMIMS/BCI_15/anatomical_2021-07-16'
+    #dir_now = '/home/rozmar/Data/Calcium_imaging/raw/DOM3-MMIMS/GABASnFR2/2021-07-20/ZStack_no_averaging'
+    basedir_raw = '/home/rozmar/Data/Calcium_imaging/raw'
+    basedir_s2p = '/home/rozmar/Data/Calcium_imaging/suite2p'
+    #%
+    s2p_params = {'max_reg_shift':50, # microns
+                  'max_reg_shift_NR': 20, # microns
+                  'block_size': 200, # microns
+                  'smooth_sigma':0.5, # microns
+                  'smooth_sigma_time':0, #seconds,
+                  }
+    
+    
+    tiffiles = os.listdir(dir_now)
+    for tiffname_now in tiffiles:
+        if '.tif' not in tiffname_now:
+            continue
+        #tiffname_now = 'zstack_anatomical_1_1_00001.tif'
+        target_movie_directory = basedir_s2p+dir_now[len(basedir_raw):]+tiffname_now[:-4]
+        Path(target_movie_directory).mkdir(parents = True,exist_ok = True)
+        tiff_now = os.path.join(dir_now,tiffname_now)
+        metadata = extract_scanimage_metadata(tiff_now)
+        nplanes = int(metadata['metadata']['hStackManager']['numSlices'])
+        tiff_orig = tifffile.imread(tiff_now)
+        
+        #%
+        imgperplane = tiff_orig.shape[1]
+        tiff_reordered = np.zeros([tiff_orig.shape[0]*tiff_orig.shape[1],tiff_orig.shape[2],tiff_orig.shape[3]],np.int16)
+        for slice_i, slicenow in enumerate(tiff_orig):
+            for img_i, imgnow in enumerate(slicenow):
+                tiff_reordered[slice_i+img_i*nplanes,:,:] = imgnow
+                
+        #%
+        tiff_now = os.path.join(target_movie_directory,tiffname_now)
+        
+        tifffile.imsave(tiff_now,tiff_reordered)
+        
+        pixelsize = metadata['roi_metadata'][0]['scanfields']['sizeXY']
+        movie_dims = metadata['roi_metadata'][0]['scanfields']['pixelResolutionXY']
+        zoomfactor = float(metadata['metadata']['hRoiManager']['scanZoomFactor'])
+        
+        XFOV = 1500*np.exp(-zoomfactor/11.5)+88 # HOTFIX for 16x objective
+        pixelsize_real =  XFOV/movie_dims[0]
+        print('pixel size changed from {} to {} '.format(pixelsize,pixelsize_real))
+        pixelsize = pixelsize_real
+        
+        FOV = np.min(pixelsize)*np.asarray(movie_dims)
+        ops = s2p_default_ops()#run_s2p.default_ops()
+        
+        ops['reg_tif'] = False # save registered movie as tif files
+        #ops['num_workers'] = s2p_params['num_workers']
+        ops['delete_bin'] = 0 
+        ops['keep_movie_raw'] = 0
+        ops['save_path0'] = target_movie_directory
+        ops['fs'] = float(metadata['frame_rate'])
+        if '[' in metadata['metadata']['hChannels']['channelSave']:
+            ops['nchannels'] = 2
+        else:
+            ops['nchannels'] = 1
+        ops['maxregshift'] =  s2p_params['max_reg_shift']/np.max(FOV)
+        ops['nimg_init'] = 100
+        ops['nonrigid'] = False
+        ops['maxregshiftNR'] = int(s2p_params['max_reg_shift_NR']/np.min(pixelsize)) # this one is in pixels...
+        block_size_optimal = np.round((s2p_params['block_size']/np.min(pixelsize)))
+        potential_bases = np.asarray([2**np.floor(np.log(block_size_optimal)/np.log(2)),2**np.ceil(np.log(block_size_optimal)/np.log(2)),3**np.floor(np.log(block_size_optimal)/np.log(3)),3**np.ceil(np.log(block_size_optimal)/np.log(3))])
+        block_size = int(potential_bases[np.argmin(np.abs(potential_bases-block_size_optimal))])
+        ops['block_size'] = np.ones(2,int)*block_size
+        ops['smooth_sigma'] = s2p_params['smooth_sigma']/np.min(pixelsize_real)#pixelsize_real #ops['diameter']/10 #
+        
+        ops['data_path'] = target_movie_directory
+        ops['tiff_list'] = [tiff_now]
+        ops['batch_size'] = 100
+        ops['nplanes'] = int(metadata['metadata']['hStackManager']['numSlices'])
+        ops['do_registration'] = 1
+        ops['roidetect'] = False
+        print('regstering {}'.format(tiff_now))
+        ops['do_regmetrics'] = False
+        ops['do_bidiphase'] = True
+        #%
+        ops = run_s2p(ops)
+
+#%%  
 
 def register_trial(target_movie_directory,file):
     #%%
@@ -143,11 +405,6 @@ def register_trial(target_movie_directory,file):
             reg_dict = json.load(read_file)
     else:
         reg_dict = {'registration_started':False}
-        
-# =============================================================================
-#     if reg_dict['registration_started']:
-#         return
-# =============================================================================
     reg_dict = {'registration_started':True,
                 'registration_started_time':str(time.time()),
                 'registration_finished':False}
@@ -165,7 +422,7 @@ def register_trial(target_movie_directory,file):
     
     FOV = np.min(pixelsize)*np.asarray(movie_dims)
     ops = s2p_default_ops()#run_s2p.default_ops()
-
+    ops['do_bidiphase'] = True
     ops['reg_tif'] = False # save registered movie as tif files
     #ops['num_workers'] = s2p_params['num_workers']
     ops['delete_bin'] = 0 
@@ -198,6 +455,7 @@ def register_trial(target_movie_directory,file):
     ops['force_refImg'] = True
     print('regstering {}'.format(tiff_now))
     ops['do_regmetrics'] = False
+    
     #%
     ops = run_s2p(ops)
     
