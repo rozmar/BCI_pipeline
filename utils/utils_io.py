@@ -324,6 +324,7 @@ def concatenate_suite2p_files(target_movie_directory):
                 zcorr = np.argmax(ops['zcorr'],1)
                 filelist_dict['zoff_mean_list'] = [np.mean(zcorr)]
                 filelist_dict['zoff_std_list'] = [np.std(zcorr)]#''
+                filelist_dict['zoff_list'] = [ops['zcorr'].tolist()]
             except:
                 pass # no zcorr
             meanimg_list = np.asarray([ops['meanImg']])
@@ -392,6 +393,7 @@ def concatenate_suite2p_files(target_movie_directory):
                 zcorr = np.argmax(ops['zcorr'],1)
                 filelist_dict['zoff_mean_list'].append(np.mean(zcorr))
                 filelist_dict['zoff_std_list'].append(np.std(zcorr))
+                filelist_dict['zoff_list'].append(ops['zcorr'].tolist())
             except:
                 pass # no zcorr
             

@@ -48,7 +48,12 @@ class App(QDialog):
                          'BCI_07',
                          'BCI_08',
                          'BCI_09',
-                         'BCI_10']
+                         'BCI_10',
+                         'BCI_14',
+                         'BCI_15',
+                         'BCI_16',
+                         'BCI_17',
+                         'GABASnFR2']
         self.s2p_params = {'max_reg_shift':50, # microns
                               'max_reg_shift_NR': 20, # microns
                               'block_size': 200, # microns
@@ -216,11 +221,13 @@ class App(QDialog):
     @pyqtSlot()
     def autoupdateprogress(self):
         #elf.plotinprogress = False
-        if self.plotinprogress:
-            print('not ready')
-            return
-        else:
-            self.plotinprogress = True
+# =============================================================================
+#         if self.plotinprogress:
+#             print('not ready')
+#             return
+#         else:
+#             self.plotinprogress = True
+# =============================================================================
         try:
             with open(os.path.join(self.target_movie_directory,'s2p_params.json'), "r") as read_file:
                 s2p_params = json.load(read_file)
@@ -272,11 +279,17 @@ class App(QDialog):
             self.handles['displacement_plot'].axes.clear()
             self.handles['displacement_plot_Z_ax'].clear()
             try:
+                try:
+                    img = np.concatenate(filelist_dict['zoff_list'],0).T
+                    self.handles['displacement_plot_Z_ax'].imshow(img ,aspect='auto', alpha = .5,origin='lower',cmap = 'magma')
+                except:
+                    pass
                 x = np.arange(len(filelist_dict['xoff_mean_list']))
                 self.handles['displacement_plot'].axes.errorbar(x, np.asarray(filelist_dict['xoff_mean_list']),yerr = np.asarray(filelist_dict['xoff_std_list']),fmt = '-',label = 'X offset')
                 self.handles['displacement_plot'].axes.errorbar(x, np.asarray(filelist_dict['yoff_mean_list']),yerr = np.asarray(filelist_dict['yoff_std_list']),fmt = '-',label = 'Y offset')
                 try:
-                    self.handles['displacement_plot'].axes.errorbar(x, np.asarray(filelist_dict['zoff_mean_list']),yerr = np.asarray(filelist_dict['zoff_std_list']),fmt = 'r-',label = 'Z offset')
+                    self.handles['displacement_plot_Z_ax'].errorbar(x, np.asarray(filelist_dict['zoff_mean_list']),yerr = np.asarray(filelist_dict['zoff_std_list']),fmt = 'r-',label = 'Z offset')
+                    
                 except:
                     pass
                 self.handles['displacement_plot'].axes.legend()
@@ -421,7 +434,7 @@ class App(QDialog):
 #             pass
 # =============================================================================
         self.handles['session_select'].clear()
-        self.handles['session_select'].addItems(sessions)
+        self.handles['session_select'].addItems(np.sort(sessions)[::-1])
         #self.handles['subject_select'].currentIndexChanged.connect(lambda: self.update_session())
         if len(sessions)>0:
             self.update_session()
@@ -462,7 +475,7 @@ class App(QDialog):
 # =============================================================================
             #self.handles['session_select'].currentIndexChanged.disconnect()
         self.handles['session_select'].clear()
-        self.handles['session_select'].addItems(sessions)
+        self.handles['session_select'].addItems(np.sort(sessions)[::-1])
         #self.handles['subject_select'].currentIndexChanged.connect(lambda: self.update_session())
         
         
