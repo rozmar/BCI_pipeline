@@ -99,6 +99,10 @@ def populate_behavior():
                 continue
             #%
             trial_key_list = list()
+            trialmetadata_list = list()
+            trialmetadata_bpod_list = list()
+            trialmetadata_scanimage_list = list()
+            trialmetadata_video_list = list()
             behaviortrial_key_list = list()
             bci_key_list = list()
             conditioned_neuron_key_list = list()
@@ -108,6 +112,13 @@ def populate_behavior():
             action_event_list = list()
             trial_choice_list = list()
             for trial_num,trial_num_bpod in enumerate(bpoddata['trial_num']):
+                if np.isnan(trial_num_bpod):
+                    if trial_num==0:
+                        trial_num_bpod = 1
+                    elif bpoddata['bpod_file_names'][trial_num] == bpoddata['bpod_file_names'][trial_num-1]:
+                        trial_num_bpod = bpoddata['trial_num'][trial_num-1] + 1
+                    else:
+                        trial_num_bpod = 1
                 trial_event_id = 0
                 action_event_id = 0
                 trial_key = {'subject_id':subject_id,
@@ -126,6 +137,43 @@ def populate_behavior():
                                 'lickport_step_time':bpoddata['zaber_trigger_step_time'][trial_num],
                                 'lickport_auto_step_freq':bpoddata['var_BaselineZaberForwardStepFrequency'][trial_num],
                                 'lickport_maximum_speed':bpoddata['zaber_max_speed'][trial_num]}
+                trialmetadata_key = {'subject_id':subject_id,
+                                     'session':session_num,
+                                     'trial':trial_num}
+                trialmetadata_list.append(trialmetadata_key)
+                trialmetadata_bpod_key ={'subject_id':subject_id,
+                                         'session':session_num,
+                                         'trial':trial_num,
+                                         'bpod_file_name':bpoddata['bpod_file_names'][trial_num][:-4],
+                                         'bpod_trial_num':trial_num_bpod}
+                trialmetadata_bpod_list.append(trialmetadata_bpod_key)
+                if not type(bpoddata['behavior_movie_name_list'][trial_num]) == str: #len(bpoddata['behavior_movie_name_list'][trial_num])>0 and not bpoddata['behavior_movie_name_list'][trial_num] == 'no behavior video':
+                    trialmetadata_video_key = {'subject_id':subject_id,
+                                               'session':session_num,
+                                               'trial':trial_num,
+                                               'behavior_video_name':bpoddata['behavior_movie_name_list'][trial_num]}
+                    trialmetadata_video_list.append(trialmetadata_video_key)
+                if not type(bpoddata['scanimage_file_names'][trial_num]) == str and not type(bpoddata['scanimage_file_names'][trial_num]) == np.str  and not type(bpoddata['scanimage_file_names'][trial_num]) == np.str_:
+                    bpoddata['scanimage_file_names'][trial_num] = ','.join(bpoddata['scanimage_file_names'][trial_num])
+                if not bpoddata['scanimage_file_names'][trial_num] == 'no movie for this trial':
+                    
+                    if type(bpoddata['scanimage_message_list'][trial_num]) == str or type(bpoddata['scanimage_message_list'][trial_num]) == np.str  or type(bpoddata['scanimage_message_list'][trial_num]) == np.str_:
+                        si_message=bpoddata['scanimage_message_list'][trial_num]
+                    else:
+                        si_message= ','.join(bpoddata['scanimage_message_list'][trial_num])
+                    trialmetadata_si_key ={'subject_id':subject_id,
+                                           'session':session_num,
+                                           'trial':trial_num,
+                                           'si_file_name':bpoddata['scanimage_file_names'][trial_num],
+                                           'si_message':si_message,
+                                           'si_bpod_time_offset':bpoddata['scanimage_bpod_time_offset'][trial_num],
+                                           'si_first_frame_offset':bpoddata['scanimage_first_frame_offset'][trial_num]}
+                    trialmetadata_scanimage_list.append(trialmetadata_si_key)
+                    
+                
+                    
+                
+                
                 if bpoddata['var_BaselineZaberForwardStepFrequency'][trial_num]>0:
                     task = 'BCI OL'
                     task_protocol = 0
@@ -336,8 +384,13 @@ def populate_behavior():
     # =============================================================================
                 experiment.Session().insert1(session_key,allow_direct_insert=True)
                 experiment.SessionTrial().insert(trial_key_list,allow_direct_insert=True)
-                experiment.BehaviorTrial().insert(behaviortrial_key_list,allow_direct_insert=True)
                 
+                experiment.TrialMetaData().insert(trialmetadata_list,allow_direct_insert=True)
+                experiment.TrialMetaData().BpodMetaData().insert(trialmetadata_bpod_list,allow_direct_insert=True)
+                experiment.TrialMetaData().VideoMetaData().insert(trialmetadata_video_list,allow_direct_insert=True)
+                experiment.TrialMetaData().ScanimageMetaData().insert(trialmetadata_scanimage_list,allow_direct_insert=True)
+                experiment.BehaviorTrial().insert(behaviortrial_key_list,allow_direct_insert=True)
+
                 experiment.LickPortSetting().insert(lickport_key_list,allow_direct_insert=True)
                 experiment.LickPortSetting.OpenDuration().insert(lickport_duration_key_list,allow_direct_insert=True)
                 experiment.BCISettings().insert(bci_key_list,allow_direct_insert=True)
