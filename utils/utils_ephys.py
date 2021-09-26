@@ -49,8 +49,12 @@ def load_wavesurfer_file(WS_path): # works only for single sweep files
         seconds = np.floor(outdict['timestamp'][5])
         microseconds = (outdict['timestamp'][5]-seconds)*1000000
         outdict['sweep_start_timestamp'] = datetime.datetime(outdict['timestamp'][0],outdict['timestamp'][1],outdict['timestamp'][2],outdict['timestamp'][3],outdict['timestamp'][4],seconds,microseconds) + datetime.timedelta(seconds = outdict['sweep_timestamp'])
+        try:
+            outdict = decode_bitcode(outdict)
+        except:
+            pass
         outdict_list.append(outdict)
-#%
+        outdict['ws_file_path'] = WS_path
     return outdict_list
 
 def decode_bitcode(ephysdata):
@@ -58,11 +62,13 @@ def decode_bitcode(ephysdata):
     sampling_rate = ephysdata['sampling_rate']
     if 'DI-TrialStart' in ephysdata.keys():
         trial_start_idxs = np.where(np.diff(ephysdata['DI-TrialStart'])==1)[0]
-        trial_end_idxs = np.where(np.diff(ephysdata['DI-TrialStart'])==-1)[0]
+        trial_end_idxs_real = np.where(np.diff(ephysdata['DI-TrialStart'])==-1)[0]
+        trial_end_idxs = np.concatenate([trial_start_idxs[1:],[len(ephysdata['DI-TrialStart'])-1]])
     else:
         trial_start_idxs = [0]
         trial_end_idxs = [-1]
     bitcode_trial_nums = list()
+    
     for trial_start_idx,trial_end_idx in zip(trial_start_idxs,trial_end_idxs):
         if 'AI-Bitcode' in ephysdata.keys():
             bitcode_channel_now = (ephysdata['AI-Bitcode'][trial_start_idx:trial_end_idx]>3)*1
@@ -95,5 +101,7 @@ def decode_bitcode(ephysdata):
             bitcode_trial_nums.append(int(digits,2))
     
     ephysdata['bitcode_trial_nums'] = bitcode_trial_nums
+    ephysdata['trial_start_indices'] = trial_start_idxs
+    ephysdata['trial_end_indices'] = trial_end_idxs_real
     #%%
     return ephysdata
