@@ -80,6 +80,33 @@ class SessionTrial(dj.Imported):
     trial_end_time : decimal(10, 5)  # (s) relative to session beginning 
     """
 
+@schema
+class TrialMetaData(dj.Imported):
+    definition = """
+    -> SessionTrial
+    """
+    class BpodMetaData(dj.Part):
+        definition = """
+        -> master
+        ---
+        bpod_file_name : varchar(100)
+        bpod_trial_num : int
+    """
+    class VideoMetaData(dj.Part):
+        definition = """
+        -> master
+        ---
+        behavior_video_name : blob
+    """    
+    class ScanimageMetaData(dj.Part):
+        definition = """
+        -> master
+        ---
+        si_file_name : varchar(2000) # sometimes there are many many files..
+        si_message : varchar(500)
+        si_bpod_time_offset : double
+        si_first_frame_offset : double
+    """    
 @schema 
 class TrialNoteType(dj.Lookup):
     definition = """
