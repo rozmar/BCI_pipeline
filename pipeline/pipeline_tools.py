@@ -34,7 +34,9 @@ def get_schema_name(name):
 def drop_every_schema(schemaname):
  #%% Drop everything   
  #%%
-
+     #%%
+    schema = dj.schema(schemaname+'-videography')
+    schema.drop(force=True)
     #%%
     schema = dj.schema(schemaname+'-experiment')
     schema.drop(force=True)
