@@ -183,10 +183,15 @@ def extract_scanimage_metadata(file): # this function is also in utils_io
     #%%
     return out
 def offset_zstack_tiles(dir_now):
+    
+    
     #%%
+    import matplotlib.pyplot as plt
+    import matplotlib.gridspec as gridspec
     #dir_now = '/home/rozmar/Data/Calcium_imaging/suite2p/DOM3-MMIMS/BCI_10/anatomical_2021-06-08/'
     #dir_now = '/home/rozmar/Data/Calcium_imaging/suite2p/DOM3-MMIMS/BCI_03/anatomical_2021-06-20/'
     #dir_now = '/home/rozmar/Data/Calcium_imaging/suite2p/DOM3-MMIMS/BCI_15/anatomical_2021-07-16'
+    dir_now = '/home/rozmar/Data/Calcium_imaging/suite2p/DOM3-MMIMS/GABASnFR2/2021-07-20/ZStack_no_averaging'
     basedir_raw = '/home/rozmar/Data/Calcium_imaging/raw'
     basedir_s2p = '/home/rozmar/Data/Calcium_imaging/suite2p'
     
@@ -232,7 +237,7 @@ def offset_zstack_tiles(dir_now):
     overlap_x_pix =  overlap_x_um/pixel_sizes[0]
     overlap_y_um = np.abs((np.mean(np.diff(uniqueycoords))-FOV)/2)
     overlap_y_pix =  overlap_y_um/pixel_sizes[0]
-    #%%
+    #%
     fig = plt.figure(figsize = [15,15])
     ax = fig.add_subplot(111)
     fig2 = plt.figure(figsize = [15,15])
@@ -275,7 +280,7 @@ def restore_motion_corrected_zstacks(dir_now):
     #dir_now = '/home/rozmar/Data/Calcium_imaging/suite2p/DOM3-MMIMS/BCI_10/anatomical_2021-06-08/'
     #dir_now = '/home/rozmar/Data/Calcium_imaging/suite2p/DOM3-MMIMS/BCI_03/anatomical_2021-06-20/'
     #dir_now = '/home/rozmar/Data/Calcium_imaging/suite2p/DOM3-MMIMS/BCI_15/anatomical_2021-07-16'
-    dir_now = '/home/rozmar/Data/Calcium_imaging/suite2p/DOM3-MMIMS/GABASnFR2/2021-07-20/ZStack_no_averaging'
+#    dir_now = '/home/rozmar/Data/Calcium_imaging/suite2p/DOM3-MMIMS/GABASnFR2/2021-07-20'
     zstack_names = os.listdir(dir_now)
     for zstack_name in zstack_names:
         planes = os.listdir(os.path.join(dir_now,zstack_name,'suite2p'))
@@ -687,6 +692,8 @@ def export_dff(suite2p_dir,raw_imaging_dir=None,revert_background_subtraction = 
     #%%
     
     if revert_background_subtraction:
+        background_values = []
+        background_subtracted_values = []
         with open(os.path.join(suite2p_dir,'filelist.json')) as f:
             filelist_dict = json.load(f)
         background_to_subtract = []
@@ -704,6 +711,8 @@ def export_dff(suite2p_dir,raw_imaging_dir=None,revert_background_subtraction = 
                 basename_prev = basename
                 #print(file_name)  
             background_to_subtract.append(np.ones(frame_num)*offset_value)
+            background_values.append(offsets[0])
+            background_subtracted_values.append(subtract_offset[0])
         background_to_subtract = np.concatenate(background_to_subtract)
            # break
         
@@ -717,8 +726,8 @@ def export_dff(suite2p_dir,raw_imaging_dir=None,revert_background_subtraction = 
 #     suite2p_dir = '/home/rozmar/Data/Calcium_imaging/suite2p/KayvonScope/BCI_07/042121'
 # =============================================================================
     
-        F = np.load(os.path.join(suite2p_dir,'F.npy'))+background_to_subtract -np.min(background_to_subtract)
-        Fneu = np.load(os.path.join(suite2p_dir,'Fneu.npy')) + background_to_subtract -np.min(background_to_subtract)
+        F = np.load(os.path.join(suite2p_dir,'F.npy'))+background_to_subtract-np.min(np.unique(background_values))
+        Fneu = np.load(os.path.join(suite2p_dir,'Fneu.npy')) + background_to_subtract -np.min(np.unique(background_values))
     else:
         F = np.load(os.path.join(suite2p_dir,'F.npy'))
         Fneu = np.load(os.path.join(suite2p_dir,'Fneu.npy'))
@@ -728,10 +737,9 @@ def export_dff(suite2p_dir,raw_imaging_dir=None,revert_background_subtraction = 
     sig_baseline = 10 
     win_baseline = int(60*fs)
     #noncell = iscell[:,0] ==0
-    Fcorr= F-0.7*Fneu
-    to_correct = np.min(Fcorr,1)<1
-    Fcorr[to_correct,:] = Fcorr[to_correct,:]-np.min(Fcorr,1)[to_correct,np.newaxis]+1 # we don't allow anything to be below 0
-    #Fcorr[noncell] = 0
+    Fcorr= F-Fneu*.7
+    #to_correct = np.min(Fcorr,1)<1
+    #Fcorr[to_correct,:] = Fcorr[to_correct,:]-np.min(Fcorr,1)[to_correct,np.newaxis]+1 # we don't allow anything to be below 0
     #%
     Flow = filters.gaussian_filter(Fcorr,    [0., sig_baseline])
     Flow = filters.minimum_filter1d(Flow,    win_baseline)
@@ -744,5 +752,7 @@ def export_dff(suite2p_dir,raw_imaging_dir=None,revert_background_subtraction = 
     np.save(os.path.join(suite2p_dir,'Fcorr.npy'),Fcorr )
     np.save(os.path.join(suite2p_dir,'dFF.npy'),dFF )
     np.save(os.path.join(suite2p_dir,'dF.npy'),dF )
+    np.save(os.path.join(suite2p_dir,'F_background_values.npy'),np.asarray([background_values,background_subtracted_values]))
+    np.save(os.path.join(suite2p_dir,'F_background_correction.npy'),np.asarray(background_to_subtract-np.min(np.unique(background_values))))
     
     
