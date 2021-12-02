@@ -6,6 +6,17 @@ from ScanImageTiffReader import ScanImageTiffReader
 import json
 import datetime
 import time
+
+def _copyfileobj_patched(fsrc, fdst, length=16*1024*1024):
+    """Patches shutil method to hugely improve copy speed"""
+    #from stackoverflow for faster copy - bigger buffer size
+    while 1:
+        buf = fsrc.read(length)
+        if not buf:
+            break
+        fdst.write(buf)
+shutil.copyfileobj = _copyfileobj_patched
+
 #%%
 def extract_scanimage_metadata(file): # this is a duplicate function - also in utils_imaging
     #%
