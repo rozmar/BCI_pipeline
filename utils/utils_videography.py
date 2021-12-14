@@ -201,6 +201,82 @@ ax_lickport.set_xlabel('time relative to GO cue')
 ax_lickport.set_ylabel('Part tracking')
 ax_embedding.set_ylabel('Embeddings')
 
+#%% copy files to dm11 for deeplucid processing
+from numpy import loadtxt
+from pathlib import Path
+import shutil
+max_framenum = 300*120
+camera = 'side'
+source_dir = '/home/rozmar/Data/Behavior_videos/DOM3-MMIMS/'
+destination_dir = '/home/rozmar/Network/nrs/svoboda/dilucid-drop/BCI_DOM3_side_v2/'
+dilucid_output_list = ['/home/rozmar/Network/nrs/svoboda/dilucid-drop-output/BCI_DOM3_side_v2',
+                       '/home/rozmar/Data/DLC_output/DOM3-MMIMS/']
+subjects = os.listdir(source_dir)
+for subject in subjects:
+    
+    if 'bci' not in subject.lower():
+        continue
+    subject_dir = os.path.join(source_dir,subject,camera)
+    sessions = os.listdir(subject_dir)
+    for session in sessions:
+        session_dir = os.path.join(subject_dir,session)
+        trials = os.listdir(session_dir)
+        for trial in trials:
+            if '.json' in trial:
+                continue
+            trial_dir = os.path.join(session_dir,trial)
+            trial_files = os.listdir(trial_dir)
+            if len(trial_files)!=2:
+                print('wrong file number, aborting trial {}'.format(trial_dir))
+                continue
+            for file in trial_files:
+                if '.txt' not in file:
+                    done = False
+                    if os.path.exists(os.path.join(destination_dir,subject,camera,session,trial,file)):
+                        done = True
+                    for dilucid_output_base in dilucid_output_list:
+                        if os.path.exists(os.path.join(dilucid_output_base,subject,camera,session,trial,file[:-4]+'.csv')):
+                            done = True
+            if done:
+                continue
+                    
+            for file in trial_files:
+                if '.txt' in file:
+                    try:
+                        exposition_times = loadtxt(os.path.join(trial_dir,file), comments="#", delimiter=",", unpack=False)
+                        framenum_log = len(exposition_times)
+                    except:
+                        framenum_log  = 0
+                else:
+                    cap = cv2.VideoCapture(os.path.join(trial_dir,file))
+                    framenum_avi = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            if framenum_avi != framenum_log:
+                print('video and log frame numbers do not match, {} vs {}, aborting trial {}'.format(framenum_avi, framenum_log,trial_dir))
+                continue
+            if framenum_avi>max_framenum:
+                print('too many frames, {} , aborting trial {}'.format(framenum_avi, trial_dir))
+                continue
+            Path(os.path.join(destination_dir,subject,camera,session,trial)).mkdir(parents=True, exist_ok=True)
+            for file in trial_files:
+                shutil.copyfile(os.path.join(trial_dir,file),os.path.join(destination_dir,subject,camera,session,trial,file))
+                    
+            #%
+            
+# =============================================================================
+#             break
+#         break
+#     
+#     break
+# =============================================================================
+    
+    
+
+
+
+
+
+
+
 #%% video analysis copy movies  and metadata to dm11
 import random
 from pathlib import Path
