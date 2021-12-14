@@ -284,6 +284,7 @@ def concatenate_suite2p_files(target_movie_directory):
     concatenated_movie_dir = os.path.join(target_movie_directory,'_concatenated_movie')
     Path(concatenated_movie_dir).mkdir(parents = True,exist_ok = True)
     concatenated_movie_file = os.path.join(target_movie_directory,'_concatenated_movie','data.bin')
+    concatenated_movie_file_chan2 = os.path.join(target_movie_directory,'_concatenated_movie','data_chan2.bin')
     concatenated_movie_ops = os.path.join(target_movie_directory,'_concatenated_movie','ops.npy')
     meanimg_file = os.path.join(target_movie_directory,'_concatenated_movie','meanImg.npy')
     concatenated_movie_filelist_json = os.path.join(target_movie_directory,'_concatenated_movie','filelist.json')
@@ -335,9 +336,12 @@ def concatenate_suite2p_files(target_movie_directory):
         except:
             pass
         sourcefile = os.path.join(dir_now,'suite2p','plane0','data.bin')
+        sourcefile_chan2 = os.path.join(dir_now,'suite2p','plane0','data_chan2.bin')
         #%
         if file_idx == 0: #the first one is copied
             shutil.copy(sourcefile,concatenated_movie_file)
+            if os.path.exists(sourcefile_chan2):
+                shutil.copy(sourcefile_chan2,concatenated_movie_file_chan2)
             np.save(concatenated_movie_ops,ops)
             filelist_dict['file_name_list'].append(file)
             filelist_dict['frame_num_list'].append(ops['nframes'])
@@ -361,6 +365,10 @@ def concatenate_suite2p_files(target_movie_directory):
             #%
             with open(concatenated_movie_file, "ab") as myfile, open(sourcefile, "rb") as file2:
                 myfile.write(file2.read())
+            if os.path.exists(concatenated_movie_file_chan2):
+                with open(concatenated_movie_file_chan2, "ab") as myfile, open(sourcefile_chan2, "rb") as file2:
+                    myfile.write(file2.read())
+            
             if not concatenated_ops_loaded:
                 ops_concatenated = np.load(concatenated_movie_ops,allow_pickle = True).tolist()
                 meanimg_list = np.load(meanimg_file)
@@ -375,7 +383,7 @@ def concatenate_suite2p_files(target_movie_directory):
                 #%
                 addlist = False
                 try:
-                    if ops[key]!=ops_concatenated[key] or key in ['xrange','yrange','nframes','frames_per_file','frames_per_folder','tPC','fs','bidi_corrected']:
+                    if ops[key]!=ops_concatenated[key] or key in ['xrange','yrange','nframes','frames_per_file','frames_per_folder','tPC','fs','bidi_corrected','bidiphase']:
                         addlist = True
                         #print(key)
                 except:

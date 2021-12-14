@@ -65,7 +65,7 @@ def extract_scanimage_metadata(file): # this function is also in utils_io
     ------
     Multi-plane movies are not handled yet
     """
-    #%
+    #%%
     image = ScanImageTiffReader(file)
     metadata_raw = image.metadata()
     description_first_image = image.description(0)
@@ -280,7 +280,9 @@ def restore_motion_corrected_zstacks(dir_now):
     #dir_now = '/home/rozmar/Data/Calcium_imaging/suite2p/DOM3-MMIMS/BCI_10/anatomical_2021-06-08/'
     #dir_now = '/home/rozmar/Data/Calcium_imaging/suite2p/DOM3-MMIMS/BCI_03/anatomical_2021-06-20/'
     #dir_now = '/home/rozmar/Data/Calcium_imaging/suite2p/DOM3-MMIMS/BCI_15/anatomical_2021-07-16'
-#    dir_now = '/home/rozmar/Data/Calcium_imaging/suite2p/DOM3-MMIMS/GABASnFR2/2021-07-20'
+
+    #dir_now = '/home/rozmar/Data/Calcium_imaging/suite2p/DOM3-MMIMS/GABASnFR2/2021-07-20/ZStack_no_averaging'
+    #dir_now = '/groups/svoboda/svobodalab/users/rozmar/BCI_suite2p/KayvonScope/BCI_xy/111521/stack_00001'
     zstack_names = os.listdir(dir_now)
     for zstack_name in zstack_names:
         planes = os.listdir(os.path.join(dir_now,zstack_name,'suite2p'))
@@ -312,11 +314,21 @@ def restore_motion_corrected_zstacks(dir_now):
         imgs = np.asarray(meanimages,dtype = np.int32)
         tifffile.imsave(os.path.join(dir_now,zstack_name+'.tiff'),imgs)
 #%%
+def average_zstack(file_in, file_out = None):
+    #%%
+    metadata = extract_scanimage_metadata(file_in)
+    if metadata['metadata']['hStackManager']['enable'] =='true' and int(metadata['metadata']['hStackManager']['framesPerSlice'])>1 and int(metadata['metadata']['hScan2D']['logAverageFactor'])<int(metadata['metadata']['hStackManager']['framesPerSlice']):
+        print('a')
+    
+    #%%
 def register_zstacks(dir_now):
 #%%
     #dir_now = '/home/rozmar/Data/Calcium_imaging/raw/DOM3-MMIMS/BCI_03/anatomical_2021-06-20/'
     #dir_now = '/home/rozmar/Data/Calcium_imaging/raw/DOM3-MMIMS/BCI_15/anatomical_2021-07-16'
     #dir_now = '/home/rozmar/Data/Calcium_imaging/raw/DOM3-MMIMS/GABASnFR2/2021-07-20/ZStack_no_averaging'
+    #dir_now = '/groups/svoboda/svobodalab/users/rozmar/BCI_suite2p/KayvonScope/BCI_xy/111521/stack_00001'
+    same_dir_output = True
+    
     basedir_raw = '/home/rozmar/Data/Calcium_imaging/raw'
     basedir_s2p = '/home/rozmar/Data/Calcium_imaging/suite2p'
     #%
@@ -333,8 +345,12 @@ def register_zstacks(dir_now):
         if '.tif' not in tiffname_now:
             continue
         #tiffname_now = 'zstack_anatomical_1_1_00001.tif'
-        target_movie_directory = basedir_s2p+dir_now[len(basedir_raw):]+tiffname_now[:-4]
-        Path(target_movie_directory).mkdir(parents = True,exist_ok = True)
+        
+        if same_dir_output:
+            target_movie_directory = dir_now
+        else:
+            target_movie_directory = basedir_s2p+dir_now[len(basedir_raw):]+tiffname_now[:-4]
+            Path(target_movie_directory).mkdir(parents = True,exist_ok = True)
         tiff_now = os.path.join(dir_now,tiffname_now)
         metadata = extract_scanimage_metadata(tiff_now)
         nplanes = int(metadata['metadata']['hStackManager']['numSlices'])
@@ -470,8 +486,13 @@ def register_trial(target_movie_directory,file):
         file = s2p_params['z_stack_name']
 #%
         zstack_tiff = os.path.join(target_movie_directory,file[:-4],file)
-        reader=ScanImageTiffReader(zstack_tiff)
-        stack=reader.data()
+        try:
+            reader=ScanImageTiffReader(zstack_tiff)
+            stack=reader.data()
+        except:
+            reader=ScanImageTiffReader(zstack_tiff+'f')
+            stack=reader.data()
+            
         if stack.shape[1]/ops['Lx'] == 2:
             stack = stack[:,::2,::2]
         elif stack.shape[1]/ops['Lx'] == 4:
@@ -605,6 +626,9 @@ def find_ROIs(full_movie_dir):
         elif key =='fs_list':
             ops[key[:-5]]=np.median(ops[key])
             print('there were multiple frame rates: {} , using: {}'.format(np.unique(ops[key]),np.median(ops[key])))
+        elif key in ['bidi_corrected_list','bidiphase_list']:
+            ops[key[:-5]]=ops[key][0]
+
         elif key.endswith('_list'):
             ops[key[:-5]]=ops[key]
         if key.endswith('_list'):
@@ -625,7 +649,7 @@ def find_ROIs(full_movie_dir):
     
     
             #%
-    if 'BCI_10' in full_movie_dir: #GCaMP8s
+    if 'BCI_10' in full_movie_dir or 'BCI_14'in full_movie_dir: #GCaMP8s
         ops['tau'] = .25
     ops['do_registration'] = 0
     ops['save_path'] = full_movie_dir
@@ -635,6 +659,10 @@ def find_ROIs(full_movie_dir):
     ops['save_path0'] = full_movie_dir
     ops['fast_disk'] = full_movie_dir
     ops['reg_file'] = os.path.join(full_movie_dir,'data.bin')
+    #ops['reg_file_chan2'] = os.path.join(full_movie_dir,'data_chan2.bin')
+    ops['nchannels'] = 1
+    
+    
     ops['roidetect'] = True
     ops['ops_path'] = full_movie_dir
     ops['xrange'] = [np.max(ops['xrange'][::2]),np.min(ops['xrange'][1::2])]
@@ -662,6 +690,8 @@ def registration_metrics(full_movie_dir):
         if key.endswith('_list') and 'Img' in key:
             ops[key[:-5]]=ops[key]
             #print(key)
+        elif key in ['bidi_corrected_list','bidiphase_list']:
+            ops[key[:-5]]=ops[key][0]
         elif key.endswith('_list'):
             ops[key[:-5]]=ops[key]
 # =============================================================================

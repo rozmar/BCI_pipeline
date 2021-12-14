@@ -23,12 +23,14 @@ import tifffile
 
 #%% read digested behavior data and fluorescence traces, align, find cell candidates
 setup = 'DOM3-MMIMS'
-subject = 'BCI_16'
-session = '2021-08-03'
-min_snr= 40
+subject = 'BCI_22'
+session = '2021-12-11'
+min_snr= 20
 
 
 suite2p_dir = '/groups/svoboda/svobodalab/users/rozmar/BCI_suite2p/{}/{}/{}/_concatenated_movie_0'.format(setup,subject,session)
+suite2p_dir = '/groups/svoboda/svobodalab/users/rozmar/BCI_suite2p/{}/{}/{}/_concatenated_movie'.format(setup,subject,session)
+
 bpod_exported = os.path.join(suite2p_dir,'{}-bpod_zaber.npy'.format(session))
 
 behavior_dict = np.load(bpod_exported,allow_pickle = True).tolist()
@@ -172,7 +174,7 @@ for dff in dFF_scaled:
     #max_SNR.append(np.max(dff))
 plt.figure()
 plt.hist(max_SNR,50)
-needed = np.asarray(max_SNR)>20
+needed = np.asarray(max_SNR)>min_snr
 dFF = np.asarray(dFF[needed,:])
 dFF_filt = np.asarray(dFF_filt)[needed,:]
 cell_indices = cell_indices[needed]
@@ -186,9 +188,11 @@ def event_based_trace_selection(trace,indices,trial_number_mask,step_back,step_f
     for i,idx in enumerate(indices):
         try:
             y = trace[idx-step_back:idx+step_forward]
-            trialnum = trial_number_mask[idx-step_back:idx+step_forward]
-            idx_needed = trialnum == trialnum[step_back]
-            y = y[idx_needed]
+# =============================================================================
+#             trialnum = trial_number_mask[idx-step_back:idx+step_forward]
+#             idx_needed = trialnum == trialnum[step_back]
+#             y = y[idx_needed]
+# =============================================================================
             try:
                 traces[i,idx_needed] = y
             except:
@@ -201,28 +205,31 @@ def export_trace_modulations(dFF,indices,step_back,step_forward,dozscore=False):
     maxvals = list()
     minvals = list()
     extrema = list()
+    mean_traces = []
     for dff in dFF:
         if dozscore:
             dff = stats.zscore(dff)
         reward_traces = event_based_trace_selection(dff,indices,trial_number_mask,step_back,step_forward)
         mean_reward_trace = np.nanmean(reward_traces,0)
         mean_reward_trace =mean_reward_trace -np.nanmean(mean_reward_trace[:step_back])
-        maxval = np.max(mean_reward_trace)
-        minval = np.min(mean_reward_trace)
+        maxval = np.nanmax(mean_reward_trace)
+        minval = np.nanmin(mean_reward_trace)
         extremum = [maxval,minval][np.argmax(np.abs([maxval,minval]))]
         maxvals.append(maxval)
         minvals.append(minval)
         extrema.append(extremum)
+        mean_traces.append(mean_reward_trace)
         
     out_dict = {'minimum_values':minvals,
                 'maximum_values':maxvals,
                 'extrema':extrema,
                 'event_indices':indices,
-                'trial_number_mask':trial_number_mask}
+                'trial_number_mask':trial_number_mask,
+                'mean_traces':np.asarray(mean_traces)}
     return out_dict
 
-step_back_s = .5
-step_forward_s = 3
+step_back_s = 5
+step_forward_s = 10
 step_back = int(step_back_s*fs)
 step_forward = int(step_forward_s*fs)
 motor_step_exclusion_window = 5 #frames
@@ -254,13 +261,32 @@ neuron_modulation['motor_step']['color'] = 'black'
 neuron_modulation['gocue']['color'] = 'green'
 neuron_modulation['reward']['color'] = 'red'
 neuron_modulation['lick']['color'] = 'blue'
+#% GOcue matrix ala Kayvon
+
+order =np.argsort(neuron_modulation['gocue']['extrema'])
+gocue_matrix = neuron_modulation['gocue']['mean_traces'][order]
+fig_gocue = plt.figure(figsize = [10,10])
+ax_matrix = fig_gocue.add_subplot(1,3,1)
+ax_matrix.imshow(gocue_matrix, aspect='auto',extent = [-1*step_back_s, step_forward_s, len(cell_indices),0])
+
+ax_snr  = fig_gocue.add_subplot(1,3,2,sharey=ax_matrix)
+snr_now = np.asarray(max_SNR*10).reshape(10,len(max_SNR)).T[order]
+ax_snr.imshow(snr_now, aspect='auto',extent = [0,1, len(cell_indices),0])
+ax_snr.set_title('SNR')
+
+ax_idx  = fig_gocue.add_subplot(1,3,3,sharey=ax_matrix)
+idx_now = np.asarray(cell_indices.tolist()*10).reshape(10,len(cell_indices)).T[order]
+ax_idx.imshow(idx_now, aspect='auto',extent = [0,1, len(cell_indices),0])
+
 #%% plot neuron modulations
 positive_neuron_n = 10
 negative_neuron_n = 10
-step_back_s = 2
-step_forward_s = 5
-step_back = int(step_back_s*fs)
-step_forward = int(step_forward_s*fs)
+# =============================================================================
+# step_back_s = 2
+# step_forward_s = 5
+# step_back = int(step_back_s*fs)
+# step_forward = int(step_forward_s*fs)
+# =============================================================================
 transient_time = np.arange(-step_back,step_forward)/fs
 modulation_dict = neuron_modulation
 keynum = len(modulation_dict.keys())
@@ -326,8 +352,12 @@ for i in range(15):
 #%% reward correlation of the conditioned neuron
 #%
                  #dff = dFF[cond_s2p_idx,:]
-neuronnum = 0
-dff = dFF[neuronnum,:]#6
+neuronnum = 1
+if np.any(neuronnum == cell_indices):
+    neuron_idx = np.argmax(neuronnum == cell_indices)
+else:
+    neuronnotfound
+dff = dFF[neuron_idx,:]#6
 step_back = 50
 step_forward = 350
 motor_step_exclusion_window = 5 #frames

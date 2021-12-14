@@ -49,10 +49,20 @@ class App(QDialog):
                          'BCI_08',
                          'BCI_09',
                          'BCI_10',
+                         'BCI_11',
+                         'BCI_12',
+                         'BCI_13',
                          'BCI_14',
                          'BCI_15',
                          'BCI_16',
                          'BCI_17',
+                         'BCI_18',
+                         'BCI_19',
+                         'BCI_20',
+                         'BCI_21',
+                         'BCI_22',
+                         'BCI_23',
+                         'BCI_xy',
                          'GABASnFR2']
         self.s2p_params = {'max_reg_shift':50, # microns
                               'max_reg_shift_NR': 20, # microns
