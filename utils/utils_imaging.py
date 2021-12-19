@@ -659,7 +659,8 @@ def find_ROIs(full_movie_dir):
     ops['save_path0'] = full_movie_dir
     ops['fast_disk'] = full_movie_dir
     ops['reg_file'] = os.path.join(full_movie_dir,'data.bin')
-    #ops['reg_file_chan2'] = os.path.join(full_movie_dir,'data_chan2.bin')
+    if os.path.exists(os.path.join(full_movie_dir,'data_chan2.bin')):
+        ops['reg_file_chan2'] = os.path.join(full_movie_dir,'data_chan2.bin')
     ops['nchannels'] = 1
     
     
